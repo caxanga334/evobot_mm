@@ -413,6 +413,28 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	if (FStrEq(pcmd, "testelectrical"))
+	{
+		edict_t* Structure = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_RESTOWER);
+
+		if (Structure)
+		{
+			for (int i = 0; i < gpGlobals->maxClients; i++)
+			{
+				if (bots[i].is_used)  // not respawning
+				{
+					if (bots[i].bot_ns_class == CLASS_MARINE_COMMANDER)
+					{
+						CommanderQueueElectricResearch(&bots[i], 0, Structure);
+					}
+				}
+			}			
+		}
+
+
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
 	if (FStrEq(pcmd, "traceentity"))
 	{
 
@@ -1688,6 +1710,7 @@ void EvoBot_ServerCommand(void)
 
 			return;
 		}
+
 
 		LOG_CONSOLE(PLID, "Invalid debug mode specified. Valid arguments are 'stop', 'testnav' or 'drone'\n");
 

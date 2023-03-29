@@ -46,37 +46,35 @@ constexpr auto MIN_PATH_RECALC_TIME = 0.33f; // How frequently can a bot recalcu
 // Possible area types. Water, Road, Door and Grass are not used (left-over from Detour library)
 enum SamplePolyAreas
 {
-	SAMPLE_POLYAREA_GROUND,
-	SAMPLE_POLYAREA_CROUCH,
-	SAMPLE_POLYAREA_WATER,
-	SAMPLE_POLYAREA_ROAD,
-	SAMPLE_POLYAREA_DOOR,
-	SAMPLE_POLYAREA_GRASS,
-	SAMPLE_POLYAREA_JUMP,
-	SAMPLE_POLYAREA_HIGHJUMP,
-	SAMPLE_POLYAREA_FALL,
-	SAMPLE_POLYAREA_HIGHFALL,
-	SAMPLE_POLYAREA_WALLCLIMB,
-	SAMPLE_POLYAREA_LADDER,
-	SAMPLE_POLYAREA_BLOCKED,
-	SAMPLE_POLYAREA_PHASEGATE
+	SAMPLE_POLYAREA_GROUND = 0,
+	SAMPLE_POLYAREA_CROUCH = 1,
+	SAMPLE_POLYAREA_WATER = 2,
+	SAMPLE_POLYAREA_BLOCKED = 3,
+	SAMPLE_POLYAREA_WALLCLIMB = 4,
+	SAMPLE_POLYAREA_LADDER = 5,
+	SAMPLE_POLYAREA_DOOR = 6,
+	SAMPLE_POLYAREA_JUMP = 7,
+	SAMPLE_POLYAREA_HIGHJUMP = 8,
+	SAMPLE_POLYAREA_FALL = 9,
+	SAMPLE_POLYAREA_HIGHFALL = 10,
+	SAMPLE_POLYAREA_PHASEGATE = 11
 };
 
 // Possible movement types. Swim and door are not used
 enum SamplePolyFlags
 {
 	SAMPLE_POLYFLAGS_WALK		= 1 << 0,		// Simple walk to traverse
-	SAMPLE_POLYFLAGS_SWIM		= 1 << 1,		// Requires swimming to traverse (not used)
-	SAMPLE_POLYFLAGS_CROUCH		= 1 << 2,		// Required crouching to traverse
-	SAMPLE_POLYFLAGS_DOOR		= 1 << 3,		// Requires opening a door to traverse (not used)
+	SAMPLE_POLYFLAGS_CROUCH		= 1 << 1,		// Required crouching to traverse
+	SAMPLE_POLYFLAGS_SWIM		= 1 << 2,		// Requires swimming to traverse (not used)
+	SAMPLE_POLYFLAGS_BLOCKED	= 1 << 3,		// Blocked by an obstruction, not usable by anyone
 	SAMPLE_POLYFLAGS_WALLCLIMB	= 1 << 4,		// Requires climbing a wall to traverse
 	SAMPLE_POLYFLAGS_LADDER		= 1 << 5,		// Requires climbing a ladder to traverse
-	SAMPLE_POLYFLAGS_FALL		= 1 << 6,		// Requires dropping down from a safe height to traverse
+	SAMPLE_POLYFLAGS_DOOR		= 1 << 6,		// Requires opening a door to traverse (not used)
 	SAMPLE_POLYFLAGS_JUMP		= 1 << 7,		// Requires a jump to traverse
-	SAMPLE_POLYFLAGS_HIGHFALL	= 1 << 8,		// Requires dropping from a high height to traverse
-	SAMPLE_POLYFLAGS_HIGHJUMP	= 1 << 9,		// Requires a jump from a high height to traverse
-	SAMPLE_POLYFLAGS_DISABLED	= 1 << 10,		// Disabled, not usable by anyone
-	SAMPLE_POLYFLAGS_BLOCKED	= 1 << 11,		// Blocked by an obstruction, not usable by anyone
+	SAMPLE_POLYFLAGS_HIGHJUMP	= 1 << 8,		// Requires a jump from a high height to traverse
+	SAMPLE_POLYFLAGS_FALL		= 1 << 9,		// Requires dropping down from a safe height to traverse
+	SAMPLE_POLYFLAGS_HIGHFALL	= 1 << 10,		// Requires dropping from a high height to traverse
+	SAMPLE_POLYFLAGS_DISABLED	= 1 << 11,		// Disabled, not usable by anyone
 	SAMPLE_POLYFLAGS_NOONOS		= 1 << 12,		// This movement is not allowed by onos
 	SAMPLE_POLYFLAGS_PHASEGATE	= 1 << 13,		// Requires using a phase gate to traverse
 	SAMPLE_POLYFLAGS_ALL		= 0xffff		// All abilities.
@@ -397,7 +395,7 @@ void ClearBotPath(bot_t* pBot);
 void ClearBotStuckMovement(bot_t* pBot);
 
 // Draws just the bot's next movement on its path. Colour-coded based on the movement type (e.g. walk, crouch, jump, ladder)
-void UTIL_DrawBotNextPathPoint(bot_t* pBot);
+void DEBUG_DrawBotNextPathPoint(bot_t* pBot);
 
 // Based on the direction the bot wants to move and it's current facing angle, sets the forward and side move, and the directional buttons to make the bot actually move
 void BotMovementInputs(bot_t* pBot);

@@ -52,6 +52,7 @@ void CommanderQueueRecycleAction(bot_t* pBot, edict_t* Structure, int Priority);
 void CommanderQueueUpgrade(bot_t* pBot, edict_t* BuildingToUpgrade, int Priority);
 void CommanderQueueItemDrop(bot_t* pBot, NSDeployableItem ItemToDeploy, const Vector& DropLocation, edict_t* Recipient, int Priority);
 void CommanderQueueActionOrder(bot_t* pBot, int Priority, int AssignedPlayer);
+void CommanderQueueElectricResearch(bot_t* pBot, int Priority, edict_t* StructureToElectrify);
 
 commander_action* UTIL_FindCommanderBuildActionOfType(bot_t* pBot, const NSStructureType StructureType, const Vector SearchLocation, const float SearchRadius);
 
@@ -110,6 +111,7 @@ bool UTIL_ArmsLabResearchIsAvailable(const NSResearch Research);
 bool UTIL_PrototypeLabResearchIsAvailable(const NSResearch Research);
 bool UTIL_ObservatoryResearchIsAvailable(const NSResearch Research);
 bool UTIL_ArmouryResearchIsAvailable(const NSResearch Research);
+bool UTIL_ElectricalResearchIsAvailable(const edict_t* Structure);
 
 bool BotCommanderPlaceStructure(bot_t* pBot, int ActionIndex, int Priority);
 bool BotCommanderDropItem(bot_t* pBot, int ActionIndex, int Priority);

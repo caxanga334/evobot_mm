@@ -273,20 +273,32 @@ struct MeshProcess : public dtTileCacheMeshProcess
 		for (int i = 0; i < params->polyCount; ++i)
 		{
 			if (polyAreas[i] == DT_TILECACHE_WALKABLE_AREA)
+			{
 				polyAreas[i] = SAMPLE_POLYAREA_GROUND;
-
-			if (polyAreas[i] == DT_TILECACHE_CROUCH_AREA)
+				polyFlags[i] = SAMPLE_POLYFLAGS_WALK;
+			}
+			else if (polyAreas[i] == DT_TILECACHE_CLIMBABLE_AREA)
+			{
+				polyAreas[i] = SAMPLE_POLYAREA_WALLCLIMB;
+				polyFlags[i] = SAMPLE_POLYFLAGS_WALLCLIMB;
+			}
+			else if (polyAreas[i] == DT_TILECACHE_LADDER_AREA)
+			{
+				polyAreas[i] = SAMPLE_POLYAREA_LADDER;
+				polyFlags[i] = SAMPLE_POLYFLAGS_LADDER;
+			}
+			else if (polyAreas[i] == DT_TILECACHE_CROUCH_AREA)
+			{
 				polyAreas[i] = SAMPLE_POLYAREA_CROUCH;
-
-			if (polyAreas[i] == DT_TILECACHE_BLOCKED_AREA)
+				polyFlags[i] = SAMPLE_POLYFLAGS_CROUCH;
+			}
+			else if (polyAreas[i] == DT_TILECACHE_BLOCKED_AREA)
 			{
 				polyAreas[i] = SAMPLE_POLYAREA_BLOCKED;
 				polyFlags[i] = SAMPLE_POLYFLAGS_BLOCKED;
 			}
 
-			if (polyAreas[i] == SAMPLE_POLYAREA_GROUND ||
-				polyAreas[i] == SAMPLE_POLYAREA_GRASS ||
-				polyAreas[i] == SAMPLE_POLYAREA_ROAD )
+			/*if (polyAreas[i] == SAMPLE_POLYAREA_GROUND)
 			{
 				polyFlags[i] = SAMPLE_POLYFLAGS_WALK;
 			}
@@ -305,7 +317,7 @@ struct MeshProcess : public dtTileCacheMeshProcess
 			else if (polyAreas[i] == SAMPLE_POLYAREA_PHASEGATE)
 			{
 				polyFlags[i] = SAMPLE_POLYFLAGS_PHASEGATE;
-			}
+			}*/
 		}
 
 		params->offMeshConAreas = OffMeshAreas;
@@ -1888,8 +1900,8 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 			break;
 
 		case SAMPLE_POLYAREA_WALLCLIMB:
-			return ( (bAtOrPastDestination && (fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f))
-				|| (!bIsAtFinalPathPoint && UTIL_PointIsDirectlyReachable(pBot, CurrentPos, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location)) );
+			return ((bAtOrPastDestination && (fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f)));
+				//|| (!bIsAtFinalPathPoint && UTIL_PointIsDirectlyReachable(pBot, CurrentPos, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location)) );
 			break;
 
 		case SAMPLE_POLYAREA_LADDER:
@@ -1989,25 +2001,6 @@ void NewMove(bot_t* pBot)
 	if (pBot->BotNavInfo.PathSize == 0)
 	{
 		return;
-	}
-
-	// If we've reached our current path point
-	if (HasBotReachedPathPoint(pBot))
-	{
-		// End of the whole path, stop all movement
-		if (pBot->BotNavInfo.CurrentPathPoint == (pBot->BotNavInfo.PathSize - 1))
-		{
-			ClearBotPath(pBot);
-			ClearBotStuck(pBot);
-			return;
-		}
-		else
-		{
-			// Pick the next point in the path
-			pBot->BotNavInfo.CurrentPathPoint++;
-
-			ClearBotStuck(pBot);
-		}
 	}
 
 	int CurrentNavArea = pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area;
@@ -2602,16 +2595,16 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 		pBot->desiredMovementDir = UTIL_GetVectorNormal2D(pBot->desiredMovementDir + (vRight * modifier));
 	}
 
-	// Stop holding crouch if we're a skulk so we can actually climb
-	if (IsPlayerSkulk(pBot->pEdict))
-	{
-		pBot->pEdict->v.button &= ~IN_DUCK;
-	}
-
 	// Jump if we're on the floor, to give ourselves a boost and remove that momentary pause while "wall-sticking" mode activates if skulk
 	if (pEdict->v.flags & FL_ONGROUND)
 	{
 		BotJump(pBot);
+	}
+
+	// Stop holding crouch if we're a skulk so we can actually climb
+	if (IsPlayerSkulk(pBot->pEdict))
+	{
+		pBot->pEdict->v.button &= ~IN_DUCK;
 	}
 
 	bool bIsFade = BotHasWeapon(pBot, WEAPON_FADE_BLINK);
@@ -3268,8 +3261,6 @@ const char* UTIL_NavmeshAreaToChar(const unsigned char Area)
 		return "Door";
 	case SAMPLE_POLYAREA_FALL:
 		return "Fall";
-	case SAMPLE_POLYAREA_GRASS:
-		return "Grass";
 	case SAMPLE_POLYAREA_GROUND:
 		return "Ground";
 	case SAMPLE_POLYAREA_HIGHFALL:
@@ -3280,8 +3271,6 @@ const char* UTIL_NavmeshAreaToChar(const unsigned char Area)
 		return "Jump";
 	case SAMPLE_POLYAREA_LADDER:
 		return "Ladder";
-	case SAMPLE_POLYAREA_ROAD:
-		return "Road";
 	case SAMPLE_POLYAREA_WALLCLIMB:
 		return "Wall Climb";
 	case SAMPLE_POLYAREA_WATER:
@@ -3894,6 +3883,26 @@ void BotFollowPath(bot_t* pBot)
 
 	nav_status* BotNavInfo = &pBot->BotNavInfo;
 	edict_t* pEdict = pBot->pEdict;
+
+	// If we've reached our current path point
+	if (HasBotReachedPathPoint(pBot))
+	{
+		// End of the whole path, stop all movement
+		if (pBot->BotNavInfo.CurrentPathPoint == (pBot->BotNavInfo.PathSize - 1))
+		{
+			ClearBotPath(pBot);
+			ClearBotStuck(pBot);
+			return;
+		}
+		else
+		{
+			// Pick the next point in the path
+			pBot->BotNavInfo.CurrentPathPoint++;
+
+			ClearBotStuck(pBot);
+		}
+	}
+
 
 	if (IsBotOffPath(pBot))
 	{
@@ -4547,7 +4556,7 @@ void ClearBotStuckMovement(bot_t* pBot)
 	pBot->BotNavInfo.UnstuckMoveStartLocation = ZERO_VECTOR;
 }
 
-void UTIL_DrawBotNextPathPoint(bot_t* pBot)
+void DEBUG_DrawBotNextPathPoint(bot_t* pBot)
 {
 	if (pBot->BotNavInfo.PathSize > 0)
 	{

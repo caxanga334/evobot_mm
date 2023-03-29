@@ -1075,6 +1075,24 @@ bool UTIL_IsNearActiveHive(const Vector Location, float SearchRadius)
 	return false;
 }
 
+edict_t* UTIL_GetAnyStructureOfTypeNearActiveHive(const NSStructureType StructureType, bool bAllowElectrical)
+{
+	for (int i = 0; i < NumTotalHives; i++)
+	{
+		if (Hives[i].Status != HIVE_STATUS_UNBUILT)
+		{
+			edict_t* ThreateningPhaseGate = UTIL_GetNearestStructureOfTypeInLocation(StructureType, Hives[i].FloorLocation, UTIL_MetresToGoldSrcUnits(30.0f), bAllowElectrical);
+
+			if (!FNullEnt(ThreateningPhaseGate) && UTIL_StructureIsFullyBuilt(ThreateningPhaseGate))
+			{
+				return ThreateningPhaseGate;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 edict_t* UTIL_GetFirstCompletedStructureOfType(const NSStructureType StructureType)
 {
 	bool bIsMarineStructure = UTIL_IsMarineStructure(StructureType);
@@ -1892,8 +1910,14 @@ Vector UTIL_GetRandomPointOfInterest()
 	}
 	else
 	{
-		return ResourceNodes[RandomIndex].origin;
+		if (UTIL_PointIsOnNavmesh(ResourceNodes[RandomIndex].origin, ALL_NAV_PROFILE))
+		{
+			return ResourceNodes[RandomIndex].origin;
+		}
+		
 	}
+
+	return ZERO_VECTOR;
 }
 
 const hive_definition* UTIL_GetNearestHiveUnderSiege(const Vector SearchLocation)

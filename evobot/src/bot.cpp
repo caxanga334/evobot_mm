@@ -588,9 +588,9 @@ void StartNewBotFrame(bot_t* pBot)
 		pEdict->v.button |= IN_DUCK;
 	}
 
-	if (pEdict->v.flags & FL_ONGROUND || IsPlayerOnLadder(pEdict))
+	if ((pEdict->v.flags & FL_ONGROUND) || IsPlayerOnLadder(pEdict))
 	{
-		if (!pBot->BotNavInfo.IsOnGround)
+		if (!pBot->BotNavInfo.IsOnGround || pBot->BotNavInfo.bHasAttemptedJump)
 		{
 			pBot->BotNavInfo.LandedTime = gpGlobals->time;
 		}
@@ -601,7 +601,10 @@ void StartNewBotFrame(bot_t* pBot)
 	else
 	{
 		pBot->BotNavInfo.IsOnGround = false;
+
 	}
+
+	pBot->BotNavInfo.bHasAttemptedJump = false;
 }
 
 void BotUseObject(bot_t* pBot, edict_t* Target, bool bContinuous)
@@ -630,6 +633,7 @@ void BotJump(bot_t* pBot)
 		{
 			pBot->pEdict->v.button |= IN_JUMP;
 			pBot->BotNavInfo.bIsJumping = true;
+			pBot->BotNavInfo.bHasAttemptedJump = true;
 		}
 	}
 	else
@@ -805,17 +809,42 @@ void DroneThink(bot_t* pBot)
 	if (pBot->BotNavInfo.PathSize > 0)
 	{
 		DEBUG_DrawPath(pBot->BotNavInfo.CurrentPath, pBot->BotNavInfo.PathSize, 0.0f);
+		DEBUG_DrawBotNextPathPoint(pBot);
+
+		Vector MoveDir = UTIL_GetVectorNormal2D(pBot->desiredMovementDir);
+		Vector EndLine = pBot->pEdict->v.origin + (MoveDir * 50.0f);
+
+		if (pBot->pEdict->v.button & IN_JUMP)
+		{
+			UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, EndLine, 255, 0, 0);
+		}
+		else
+		{
+			UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, EndLine);
+		}
 	}
 }
 
 void TestNavThink(bot_t* pBot)
 {
+	if (!bGameIsActive)
+	{
+		WaitGameStartThink(pBot);
+		return;
+	}
+
 	UpdateAndClearTasks(pBot);
 
 	pBot->CurrentTask = &pBot->PrimaryBotTask;
 
 	if (pBot->PrimaryBotTask.TaskType == TASK_MOVE)
 	{
+		if (vDist2DSq(pBot->pEdict->v.origin, pBot->PrimaryBotTask.TaskLocation) < sqrf(UTIL_MetresToGoldSrcUnits(2.0f)))
+		{
+			UTIL_ClearBotTask(pBot, &pBot->PrimaryBotTask);
+			return;
+		}
+
 		BotProgressTask(pBot, &pBot->PrimaryBotTask);
 	}
 	else
@@ -2146,13 +2175,35 @@ void BotAlienCheckPriorityTargets(bot_t* pBot, bot_task* Task)
 
 	bool bAllowElectrified = !IsPlayerSkulk(pBot->pEdict);
 
-	edict_t* PhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(20.0f), bAllowElectrified);
+	edict_t* DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_PHASEGATE, bAllowElectrified);
 
-	if (!FNullEnt(PhaseGate))
+	if (FNullEnt(DangerStructure))
+	{
+		DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_ANYTURRETFACTORY, bAllowElectrified);
+
+		if (FNullEnt(DangerStructure))
+		{
+			DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_SIEGETURRET, bAllowElectrified);
+		}
+	}
+
+	if (!FNullEnt(DangerStructure))
 	{
 		Task->TaskType = TASK_ATTACK;
-		Task->TaskTarget = PhaseGate;
-		Task->TaskLocation = PhaseGate->v.origin;
+		Task->TaskTarget = DangerStructure;
+		Task->TaskLocation = DangerStructure->v.origin;
+		Task->bOrderIsUrgent = true;
+
+		return;
+	}
+	
+	edict_t* AnyPhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(20.0f), bAllowElectrified);
+
+	if (!FNullEnt(AnyPhaseGate))
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = AnyPhaseGate;
+		Task->TaskLocation = AnyPhaseGate->v.origin;
 		Task->bOrderIsUrgent = true;
 
 		return;
@@ -4805,6 +4856,9 @@ float UTIL_GetMaxIdealWeaponRange(const NSWeapon Weapon)
 		case WEAPON_ONOS_GORE:
 		case WEAPON_ONOS_DEVOUR:
 			return UTIL_MetresToGoldSrcUnits(1.5f);
+		case WEAPON_FADE_SWIPE:
+		case WEAPON_SKULK_BITE:
+			return 64.0f;
 		default:
 			return 48.0f;
 	}
@@ -6558,11 +6612,24 @@ bool CommanderProgressResearchAction(bot_t* CommanderBot, int ActionIndex, int P
 {
 	commander_action* action = &CommanderBot->CurrentCommanderActions[Priority][ActionIndex];
 
-	if (UTIL_ResearchInProgress(action->ResearchId) || !UTIL_MarineResearchIsAvailable(action->ResearchId))
+	if (action->ResearchId == RESEARCH_ELECTRICAL)
 	{
-		UTIL_ClearCommanderAction(CommanderBot, ActionIndex, Priority);
-		return false;
+		if (UTIL_StructureIsResearching(action->StructureOrItem) || !UTIL_ElectricalResearchIsAvailable(action->StructureOrItem))
+		{
+			UTIL_ClearCommanderAction(CommanderBot, ActionIndex, Priority);
+			return false;
+		}
 	}
+	else
+	{
+		if (UTIL_ResearchInProgress(action->ResearchId) || !UTIL_MarineResearchIsAvailable(action->ResearchId))
+		{
+			UTIL_ClearCommanderAction(CommanderBot, ActionIndex, Priority);
+			return false;
+		}
+	}
+
+	
 
 	return BotCommanderResearchTech(CommanderBot, ActionIndex, Priority);
 
@@ -6574,7 +6641,6 @@ bool CommanderProgressItemDropAction(bot_t* CommanderBot, int ActionIndex, int P
 
 	if (!FNullEnt(action->StructureOrItem))
 	{
-		UTIL_SayText("Item already dropped!\n", clients[0]);
 		UTIL_ClearCommanderAction(CommanderBot, ActionIndex, Priority);
 		return false;
 	}

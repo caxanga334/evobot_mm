@@ -988,6 +988,30 @@ void CommanderQueueArmsLabResearch(bot_t* pBot, NSResearch Research, int Priorit
 	}
 }
 
+void CommanderQueueElectricResearch(bot_t* pBot, int Priority, edict_t* StructureToElectrify)
+{
+	if (FNullEnt(StructureToElectrify)) { return; }
+
+	NSStructureType StructureTypeToElectrify = UTIL_GetStructureTypeFromEdict(StructureToElectrify);
+
+	if (!UTIL_StructureTypesMatch(StructureTypeToElectrify, STRUCTURE_MARINE_ANYTURRETFACTORY) && !UTIL_StructureTypesMatch(StructureTypeToElectrify, STRUCTURE_MARINE_RESTOWER)) { return; }
+
+	int ActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
+
+	if (ActionIndex > -1)
+	{
+		UTIL_ClearCommanderAction(pBot, ActionIndex, Priority);
+
+		commander_action* action = &pBot->CurrentCommanderActions[Priority][ActionIndex];
+
+		action->bIsActive = true;
+		action->ActionType = ACTION_RESEARCH;
+		action->StructureOrItem = StructureToElectrify;
+		action->ResearchId = RESEARCH_ELECTRICAL;
+
+	}
+}
+
 void CommanderQueueArmouryResearch(bot_t* pBot, NSResearch Research, int Priority)
 {
 	if (UTIL_MarineResearchIsAvailable(Research))
@@ -1135,7 +1159,13 @@ bool UTIL_IsCommanderActionValid(bot_t* CommanderBot, int CommanderActionIndex, 
 	case ACTION_BUILD:
 		return UTIL_CommanderBuildActionIsValid(CommanderBot, action);
 	case ACTION_RESEARCH:
+	{
+		if (action->ResearchId == RESEARCH_ELECTRICAL)
+		{
+			return UTIL_ElectricalResearchIsAvailable(action->StructureOrItem);
+		}
 		return (UTIL_MarineResearchIsAvailable(action->ResearchId) && !FNullEnt(action->StructureOrItem));
+	}
 	case ACTION_DROPITEM:
 		return FNullEnt(action->StructureOrItem) && UTIL_ItemCanBeDeployed(action->ItemToDeploy) && ((action->BuildLocation != ZERO_VECTOR) || !FNullEnt(action->ActionTarget));
 	case ACTION_GIVEORDER:
@@ -1772,22 +1802,17 @@ bool UTIL_MarineResearchIsAvailable(const NSResearch Research)
 	case RESEARCH_ARMSLAB_WEAPONS3:
 	case RESEARCH_ARMSLAB_CATALYSTS:
 		return UTIL_ArmsLabResearchIsAvailable(Research);
-		break;
 	case RESEARCH_PROTOTYPELAB_JETPACKS:
 	case RESEARCH_PROTOTYPELAB_HEAVYARMOUR:
 		return UTIL_PrototypeLabResearchIsAvailable(Research);
-		break;
 	case RESEARCH_OBSERVATORY_DISTRESSBEACON:
 	case RESEARCH_OBSERVATORY_MOTIONTRACKING:
 	case RESEARCH_OBSERVATORY_PHASETECH:
 		return UTIL_ObservatoryResearchIsAvailable(Research);
-		break;
 	case RESEARCH_ARMOURY_GRENADES:
 		return UTIL_ArmouryResearchIsAvailable(Research);
-		break;
 	default:
 		return false;
-		break;
 	}
 
 
@@ -1869,6 +1894,19 @@ bool UTIL_ObservatoryResearchIsAvailable(const NSResearch Research)
 	}
 
 	return false;
+}
+
+bool UTIL_ElectricalResearchIsAvailable(const edict_t* Structure)
+{
+	if (FNullEnt(Structure)) { return false; }
+
+	if (UTIL_IsStructureElectrified(Structure)) { return false; }
+
+	NSStructureType StructureTypeToElectrify = UTIL_GetStructureTypeFromEdict(Structure);
+
+	if (!UTIL_StructureTypesMatch(StructureTypeToElectrify, STRUCTURE_MARINE_ANYTURRETFACTORY) && !UTIL_StructureTypesMatch(StructureTypeToElectrify, STRUCTURE_MARINE_RESTOWER)) { return false; }	
+
+	return (Structure->v.iuser4 & MASK_UPGRADE_1);
 }
 
 bool UTIL_ArmouryResearchIsAvailable(const NSResearch Research)
@@ -2740,6 +2778,11 @@ void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 				}
 			}
 
+			if (NumSiegeTurrets > 0 && !UTIL_IsStructureElectrified(TurretFactory) && !UTIL_ResearchActionAlreadyExists(CommanderBot, RESEARCH_ELECTRICAL))
+			{
+				CommanderQueueElectricResearch(CommanderBot, 0, TurretFactory);
+			}
+
 		}
 	}
 
@@ -2811,8 +2854,13 @@ void QueueSecureHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority
 		}
 	}
 
-	
-
+	if (!FNullEnt(ExistingPhaseGate))
+	{
+		if (!UTIL_IsStructureElectrified(ExistingTurretFactory) && !UTIL_ResearchActionAlreadyExists(CommanderBot, RESEARCH_ELECTRICAL))
+		{
+			CommanderQueueElectricResearch(CommanderBot, Priority, ExistingTurretFactory);
+		}
+	}
 	
 }
 
