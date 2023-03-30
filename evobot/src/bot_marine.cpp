@@ -461,7 +461,10 @@ void MarineHuntEnemy(bot_t* pBot, enemy_status* TrackedEnemy)
 		MoveTo(pBot, LastSeenLocation, MOVESTYLE_NORMAL);
 	}
 	
-	LookAt(pBot, LastSeenLocation);
+	if (!TrackedEnemy->bIsTracked)
+	{
+		LookAt(pBot, LastSeenLocation);
+	}
 
 	return;
 }

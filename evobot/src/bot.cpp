@@ -207,6 +207,10 @@ void BotCreate(edict_t *pPlayer, int Team)
 
 	pBot->bot_team = Team;
 
+	const bot_skill BotSkillSettings = CONFIG_GetGlobalBotSkillLevel();
+
+	memcpy(&pBot->BotSkillSettings, &BotSkillSettings, sizeof(bot_skill));
+
 	//char logName[64];
 
 	//sprintf(logName, "%s_log.txt", c_name);
@@ -257,7 +261,12 @@ void UTIL_ClearAllBotData(bot_t* pBot)
 	pBot->InterpolatedLookDirection = ZERO_VECTOR;
 	pBot->LookTarget = nullptr;
 	pBot->LookTargetLocation = ZERO_VECTOR;
-	pBot->MoveLookLocation = ZERO_VECTOR;	
+	pBot->MoveLookLocation = ZERO_VECTOR;
+
+	pBot->BotSkillSettings.bot_aim_skill = 0.0f;
+	pBot->BotSkillSettings.bot_motion_tracking_skill = 0.0f;
+	pBot->BotSkillSettings.bot_reaction_time = 0.0f;
+	pBot->BotSkillSettings.bot_view_speed = 0.0f;
 
 	pBot->CurrentRole = BOT_ROLE_NONE;
 
@@ -825,6 +834,27 @@ void DroneThink(bot_t* pBot)
 	}
 }
 
+void TestAimThink(bot_t* pBot)
+{
+	if (!bGameIsActive)
+	{
+		WaitGameStartThink(pBot);
+		return;
+	}
+
+	pBot->CurrentEnemy = UTIL_GetNextEnemyTarget(pBot);
+
+	if (pBot->CurrentEnemy > -1)
+	{
+		edict_t* CurrentEnemy = pBot->TrackedEnemies[pBot->CurrentEnemy].EnemyEdict;
+
+		DEBUG_BotAttackTarget(pBot, CurrentEnemy);
+
+		return;
+	}
+
+}
+
 void TestNavThink(bot_t* pBot)
 {
 	if (!bGameIsActive)
@@ -893,6 +923,8 @@ void BotUpdateDesiredViewRotation(bot_t* pBot)
 	// We always prioritise MoveLookLocation if it is set so the bot doesn't screw up wall climbing or ladder movement
 	Vector NewLookLocation = (pBot->MoveLookLocation != ZERO_VECTOR) ? pBot->MoveLookLocation : pBot->LookTargetLocation;
 
+	bool bIsMoveLook = (pBot->MoveLookLocation != ZERO_VECTOR);
+
 	// We're already interpolating to an existing desired look direction (see BotUpdateViewRotation()) or we don't have a desired look target
 	if (pBot->DesiredLookDirection != ZERO_VECTOR || !NewLookLocation) { return; }
 
@@ -938,25 +970,90 @@ void BotUpdateDesiredViewRotation(bot_t* pBot)
 	// This simulates the fact that humans can't spin and lock their cross-hair exactly on the target, the further you have the spin, the more off your view will be first attempt
 	if (fabsf(maxDelta) >= 45.0f)
 	{
-		pBot->ViewInterpolationSpeed = 300.0f;//1.25f;
-		pBot->DesiredLookDirection.x += frandrange(-20.0f, 20.0f);
-		pBot->DesiredLookDirection.y += frandrange(-20.0f, 20.0f);
+		pBot->ViewInterpolationSpeed = 500.0f;
+
+		if (!bIsMoveLook)
+		{
+			pBot->ViewInterpolationSpeed *= pBot->BotSkillSettings.bot_view_speed;
+			float xOffset = frandrange(10.0f, 20.0f);
+			xOffset -= xOffset * pBot->BotSkillSettings.bot_aim_skill;
+
+			float yOffset = frandrange(10.0f, 20.0f);
+			yOffset -= yOffset * pBot->BotSkillSettings.bot_aim_skill;
+
+			if (randbool())
+			{
+				xOffset *= -1.0f;
+			}
+
+			if (randbool())
+			{
+				yOffset *= -1.0f;
+			}
+
+			
+
+			pBot->DesiredLookDirection.x += xOffset;
+			pBot->DesiredLookDirection.y += yOffset;
+		}
 	}
 	else if (fabsf(maxDelta) >= 25.0f)
 	{
-		pBot->ViewInterpolationSpeed = 150.0f;//0.3f;
-		pBot->DesiredLookDirection.x += frandrange(-10.0f, 10.0f);
-		pBot->DesiredLookDirection.y += frandrange(-10.0f, 10.0f);
+		pBot->ViewInterpolationSpeed = 250.0f;
+
+		if (!bIsMoveLook)
+		{
+			pBot->ViewInterpolationSpeed *= pBot->BotSkillSettings.bot_view_speed;
+			float xOffset = frandrange(5.0f, 10.0f);
+			xOffset -= xOffset * pBot->BotSkillSettings.bot_aim_skill;
+
+			float yOffset = frandrange(5.0f, 10.0f);
+			yOffset -= yOffset * pBot->BotSkillSettings.bot_aim_skill;
+
+			if (randbool())
+			{
+				xOffset *= -1.0f;
+			}
+
+			if (randbool())
+			{
+				yOffset *= -1.0f;
+			}
+
+			pBot->DesiredLookDirection.x += xOffset;
+			pBot->DesiredLookDirection.y += yOffset;
+		}
 	}
 	else if (fabsf(maxDelta) >= 5.0f)
 	{
-		pBot->ViewInterpolationSpeed = 50.0f;//0.1f;
-		pBot->DesiredLookDirection.x += frandrange(-5.0f, 5.0f);
-		pBot->DesiredLookDirection.y += frandrange(-5.0f, 5.0f);
+		pBot->ViewInterpolationSpeed = 50.0f;
+
+		if (!bIsMoveLook)
+		{
+			pBot->ViewInterpolationSpeed *= pBot->BotSkillSettings.bot_view_speed;
+			float xOffset = frandrange(2.0f, 5.0f);
+			xOffset -= xOffset * pBot->BotSkillSettings.bot_aim_skill;
+
+			float yOffset = frandrange(2.0f, 5.0f);
+			yOffset -= yOffset * pBot->BotSkillSettings.bot_aim_skill;
+
+			if (randbool())
+			{
+				xOffset *= -1.0f;
+			}
+
+			if (randbool())
+			{
+				yOffset *= -1.0f;
+			}
+
+			pBot->DesiredLookDirection.x += xOffset;
+			pBot->DesiredLookDirection.y += yOffset;
+		}
 	}
 	else
 	{
-		pBot->ViewInterpolationSpeed = 50.0f;
+		pBot->ViewInterpolationSpeed = 50.0f * pBot->BotSkillSettings.bot_view_speed;
 	}
 
 	// We once again clamp everything to valid values in case the offsets we applied above took us above that
@@ -986,92 +1083,112 @@ byte ThrottledMsec(bot_t *pBot)
 	return (byte)newmsec;
 }
 
+void UTIL_ClearEnemyTrackingInfo(enemy_status* TrackingInfo)
+{
+	TrackingInfo->bCurrentlyVisible = false;
+	TrackingInfo->bIsTracked = false;
+	TrackingInfo->TrackedLocation = ZERO_VECTOR;
+	TrackingInfo->LastSeenLocation = ZERO_VECTOR;
+	TrackingInfo->LastSeenVelocity = ZERO_VECTOR;
+	TrackingInfo->bIsValidTarget = false;
+}
+
 void UpdateView(bot_t* pBot) {
 	int visibleCount = 0;
 
 	// Updates the view frustum based on the bot's position and v_angle
 	UpdateViewFrustum(pBot);
 
-	memset(pBot->visiblePlayers, 0, sizeof(float) * 32);
-
 	// Update list of currently visible players
 	for (int i = 0; i < 32; i++) {
-		if (!FNullEnt(clients[i])) {
-			if (!IsPlayerInReadyRoom(clients[i]) && clients[i]->v.team != pBot->pEdict->v.team && !IsPlayerSpectator(clients[i]) && !IsPlayerDead(clients[i]) && !IsPlayerBeingDigested(clients[i]) && !IsPlayerCommander(clients[i]))
+		pBot->TrackedEnemies[i].EnemyEdict = clients[i];
+		if (FNullEnt(clients[i]) || !IsPlayerActiveInGame(clients[i]) || clients[i]->v.team == pBot->pEdict->v.team)
+		{
+			UTIL_ClearEnemyTrackingInfo(&pBot->TrackedEnemies[i]);
+			continue;
+		}
+
+		enemy_status* TrackingInfo = &pBot->TrackedEnemies[i];
+
+		if (gpGlobals->time < TrackingInfo->NextUpdateTime)
+		{
+			continue;
+		}
+
+		pBot->TrackedEnemies[i].EnemyEdict = clients[i];
+		edict_t* Enemy = clients[i];
+
+		bool bBotCanSeePlayer = IsPlayerVisibleToBot(pBot, Enemy);
+
+		if (bBotCanSeePlayer != TrackingInfo->bCurrentlyVisible)
+		{
+			TrackingInfo->bCurrentlyVisible = bBotCanSeePlayer;
+			TrackingInfo->NextUpdateTime = gpGlobals->time + pBot->BotSkillSettings.bot_reaction_time;
+			continue;
+		}
+		
+		if (bBotCanSeePlayer)
+		{
+			Vector BotLocation = UTIL_GetCentreOfEntity(Enemy);
+			Vector BotVelocity = Enemy->v.velocity;
+
+			if (gpGlobals->time >= TrackingInfo->NextVelocityUpdateTime)
 			{
-				pBot->TrackedEnemies[i].EnemyEdict = clients[i];
+				TrackingInfo->LastSeenVelocity = TrackingInfo->PendingSeenVelocity;
+			}
 
-				if (IsPlayerVisibleToBot(pBot, clients[i]))
-				{
-					pBot->visiblePlayers[visibleCount++] = clients[i];
+			if (BotVelocity != TrackingInfo->LastSeenVelocity)
+			{
+				TrackingInfo->PendingSeenVelocity = BotVelocity;
+				TrackingInfo->NextVelocityUpdateTime = gpGlobals->time + pBot->BotSkillSettings.bot_reaction_time;
+			}
 
-					pBot->TrackedEnemies[i].EnemyEdict = clients[i];
-					pBot->TrackedEnemies[i].bIsValidTarget = true;
-					pBot->TrackedEnemies[i].bCurrentlyVisible = true;
-					pBot->TrackedEnemies[i].LastSeenLocation = UTIL_GetCentreOfEntity(clients[i]);
-					pBot->TrackedEnemies[i].LastSeenVelocity = clients[i]->v.velocity;
-					pBot->TrackedEnemies[i].bIsTracked = false;
-					pBot->TrackedEnemies[i].LastSeenTime = gpGlobals->time;
-					
-				}
-				else
-				{
-					pBot->TrackedEnemies[i].bCurrentlyVisible = false;
+			TrackingInfo->bIsValidTarget = true;
+			TrackingInfo->bCurrentlyVisible = true;
+			TrackingInfo->LastSeenLocation = BotLocation;
 
-					if (IsPlayerParasited(pBot->TrackedEnemies[i].EnemyEdict) || IsPlayerMotionTracked(pBot->TrackedEnemies[i].EnemyEdict))
-					{
-						pBot->TrackedEnemies[i].TrackedLocation = clients[i]->v.origin;
-						pBot->TrackedEnemies[i].LastSeenVelocity = clients[i]->v.velocity;
-						pBot->TrackedEnemies[i].LastTrackedTime = gpGlobals->time;
-						pBot->TrackedEnemies[i].bIsTracked = true;
+			TrackingInfo->bIsTracked = false;
+			TrackingInfo->LastSeenTime = gpGlobals->time;
+
+			continue;
+
+		}
+		
+
+		TrackingInfo->bCurrentlyVisible = false;
+
+		if (IsPlayerParasited(Enemy) || IsPlayerMotionTracked(Enemy))
+		{
+			TrackingInfo->TrackedLocation = Enemy->v.origin;
+			TrackingInfo->LastSeenVelocity = Enemy->v.velocity;
+			TrackingInfo->LastTrackedTime = gpGlobals->time;
+			TrackingInfo->bIsTracked = true;
 						
-					}
-					else
-					{
-						pBot->TrackedEnemies[i].bIsTracked = false;
-					}
-
-					if (pBot->TrackedEnemies[i].bIsTracked)
-					{
-						bool IsCloseEnoughToBeRelevant = vDist2DSq(pBot->pEdict->v.origin, pBot->TrackedEnemies[i].TrackedLocation) < sqrf(UTIL_MetresToGoldSrcUnits(10.0f));
-						bool RecentlyTracked = (gpGlobals->time - pBot->TrackedEnemies[i].LastTrackedTime) < 5.0f;
-						pBot->TrackedEnemies[i].bIsValidTarget = IsCloseEnoughToBeRelevant && RecentlyTracked;
-					}
-					else
-					{
-						if (vDist2DSq(pBot->pEdict->v.origin, pBot->TrackedEnemies[i].LastSeenLocation) < sqrf(UTIL_GetPlayerRadius(pBot->pEdict)))
-						{
-							if (!UTIL_QuickTrace(pBot->pEdict, pBot->CurrentEyePosition, pBot->TrackedEnemies[i].EnemyEdict->v.origin))
-							{
-								pBot->TrackedEnemies[i].LastSeenTime = 0.0f;
-							}
-						}
-						pBot->TrackedEnemies[i].bIsValidTarget = (gpGlobals->time - pBot->TrackedEnemies[i].LastSeenTime) < 10.0f;
-					}
-				}				
-			}
-			else
-			{
-				pBot->TrackedEnemies[i].bCurrentlyVisible = false;
-				pBot->TrackedEnemies[i].TrackedLocation = ZERO_VECTOR;
-				pBot->TrackedEnemies[i].LastSeenLocation = ZERO_VECTOR;
-				pBot->TrackedEnemies[i].bIsValidTarget = false;
-			}
 		}
 		else
 		{
-			pBot->TrackedEnemies[i].bCurrentlyVisible = false;
-			pBot->TrackedEnemies[i].TrackedLocation = ZERO_VECTOR;
-			pBot->TrackedEnemies[i].LastSeenLocation = ZERO_VECTOR;
-			pBot->TrackedEnemies[i].bIsValidTarget = false;
+			TrackingInfo->bIsTracked = false;
 		}
-	}
 
-	// Call BotSeePlayer for every visible player each frame
-	for (int i = 0; i < visibleCount; i++) {
-		BotSeePlayer(pBot, pBot->visiblePlayers[i]);
+		if (TrackingInfo->bIsTracked)
+		{
+			bool IsCloseEnoughToBeRelevant = vDist2DSq(Enemy->v.origin, TrackingInfo->TrackedLocation) < sqrf(UTIL_MetresToGoldSrcUnits(10.0f));
+			bool RecentlyTracked = (gpGlobals->time - TrackingInfo->LastTrackedTime) < 5.0f;
+			TrackingInfo->bIsValidTarget = IsCloseEnoughToBeRelevant && RecentlyTracked;
+		}
+		else
+		{
+			if (vDist2DSq(Enemy->v.origin, TrackingInfo->LastSeenLocation) < sqrf(UTIL_GetPlayerRadius(pBot->pEdict)))
+			{
+				if (!UTIL_QuickTrace(pBot->pEdict, pBot->CurrentEyePosition, Enemy->v.origin))
+				{
+					TrackingInfo->LastSeenTime = 0.0f;
+				}
+			}
+			TrackingInfo->bIsValidTarget = (gpGlobals->time - TrackingInfo->LastSeenTime) < 10.0f;
+		}	
+	
 	}
-
 }
 
 Vector UTIL_GetGrenadeThrowTarget(bot_t* pBot, const Vector TargetLocation, const float ExplosionRadius)
@@ -1135,20 +1252,6 @@ Vector UTIL_GetGrenadeThrowTarget(bot_t* pBot, const Vector TargetLocation, cons
 	}
 }
 
-
-
-
-
-
-
-
-
-
-// Called once per frame per player currently visible
-void BotSeePlayer(bot_t* pBot, edict_t* seen)
-{
-
-}
 
 bool UTIL_PlayerHasAlienUpgradeOfType(const edict_t* Player, const HiveTechStatus TechType)
 {
@@ -1350,6 +1453,8 @@ bool IsPlayerVisibleToBot(bot_t* Observer, edict_t* TargetPlayer)
 	return hit.flFraction >= 1.0f;
 }
 
+
+
 /* Makes the bot look at the specified entity */
 void LookAt(bot_t* pBot, edict_t* target)
 {
@@ -1364,19 +1469,35 @@ void LookAt(bot_t* pBot, edict_t* target)
 		return;
 	}
 
-	if ((gpGlobals->time - pBot->LastTargetTrackUpdate) >= pBot->AimingDelay)
+	enemy_status* TrackedEnemyRef = UTIL_GetTrackedEnemyRefForTarget(pBot, target);
+
+	Vector TargetVelocity = (TrackedEnemyRef) ? TrackedEnemyRef->LastSeenVelocity : pBot->LookTarget->v.velocity;
+	Vector TargetLocation = (TrackedEnemyRef) ? TrackedEnemyRef->LastSeenLocation : UTIL_GetCentreOfEntity(pBot->LookTarget);
+
+	NSWeapon CurrentWeapon = UTIL_GetBotCurrentWeapon(pBot);
+
+	Vector NewLoc = UTIL_GetAimLocationToLeadTarget(pBot->CurrentEyePosition, TargetLocation, TargetVelocity, UTIL_GetProjectileVelocityForWeapon(CurrentWeapon));
+		
+	float Offset = frandrange(30.0f, 50.0f);
+
+	Offset -= Offset * pBot->BotSkillSettings.bot_motion_tracking_skill;
+
+	if (randbool())
 	{
-		enemy_status* TrackedEnemyRef = UTIL_GetTrackedEnemyRefForTarget(pBot, target);
-
-		Vector TargetVelocity = (TrackedEnemyRef) ? TrackedEnemyRef->LastSeenVelocity : pBot->LookTarget->v.velocity;
-		Vector TargetLocation = (TrackedEnemyRef) ? TrackedEnemyRef->LastSeenLocation : UTIL_GetCentreOfEntity(pBot->LookTarget);
-
-		Vector NewLoc = TargetLocation + (TargetVelocity * 0.2f);
-		NewLoc = NewLoc - (pBot->pEdict->v.velocity * 0.2f);
-
-		pBot->LookTargetLocation = NewLoc;
-		pBot->LastTargetTrackUpdate = gpGlobals->time;
+		Offset *= -1.0f;
 	}
+
+	float NewDist = vDist3D(TargetLocation, NewLoc) + Offset;
+
+
+	float MoveSpeed = vSize3D(target->v.velocity);
+
+	Vector MoveVector = (MoveSpeed > 5.0f) ? UTIL_GetVectorNormal(target->v.velocity) : ZERO_VECTOR;
+
+	Vector NewAimLoc = TargetLocation + (MoveVector * NewDist);
+
+	pBot->LookTargetLocation = NewAimLoc;
+	pBot->LastTargetTrackUpdate = gpGlobals->time;
 }
 
 /* Makes the bot look at the specified position */
@@ -1959,7 +2080,15 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		}
 		else
 		{
-			AlienHarasserSetPrimaryTask(pBot, Task);
+			if (IsPlayerFade(pBot->pEdict))
+			{
+				AlienDestroyerSetPrimaryTask(pBot, Task);
+			}
+			else
+			{
+				AlienHarasserSetPrimaryTask(pBot, Task);
+			}
+			
 		}
 		
 	}
@@ -1972,7 +2101,14 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		}
 		else
 		{
-			AlienHarasserSetPrimaryTask(pBot, Task);
+			if (IsPlayerOnos(pBot->pEdict))
+			{
+				AlienDestroyerSetPrimaryTask(pBot, Task);
+			}
+			else
+			{
+				AlienHarasserSetPrimaryTask(pBot, Task);
+			}
 		}
 		
 	}
@@ -2309,7 +2445,7 @@ void SkulkCombatThink(bot_t* pBot)
 
 		MoveTo(pBot, EnemyLoc, MOVESTYLE_AMBUSH);
 
-		LookAt(pBot, EnemyLoc);
+		//LookAt(pBot, EnemyLoc);
 
 		return;
 	}
@@ -2481,7 +2617,7 @@ void FadeCombatThink(bot_t* pBot)
 
 		MoveTo(pBot, EnemyLoc, MOVESTYLE_NORMAL);
 
-		LookAt(pBot, EnemyLoc);
+		//LookAt(pBot, EnemyLoc);
 
 		return;
 	}
@@ -2770,7 +2906,108 @@ float GetPlayerEnergyRegenPerSecond(edict_t* Player)
 	return kAlienEnergyRate * (1.0f + (AdrenalineLevel * kAdrenalineEnergyPercentPerLevel));
 }
 
+void AlienDestroyerSetPrimaryTask(bot_t* pBot, bot_task* Task)
+{
+	bool bAllowElectrified = !IsPlayerSkulk(pBot->pEdict);
 
+	edict_t* DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_PHASEGATE, bAllowElectrified);
+
+	if (FNullEnt(DangerStructure))
+	{
+		DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_ANYTURRETFACTORY, bAllowElectrified);
+
+		if (FNullEnt(DangerStructure))
+		{
+			DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_SIEGETURRET, bAllowElectrified);
+		}
+	}
+
+	if (!FNullEnt(DangerStructure))
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = DangerStructure;
+		Task->TaskLocation = DangerStructure->v.origin;
+		Task->bOrderIsUrgent = true;
+
+		return;
+	}
+
+	edict_t* BlockingStructure = UTIL_GetAnyStructureOfTypeNearUnbuiltHive(STRUCTURE_MARINE_PHASEGATE, bAllowElectrified);
+
+	if (FNullEnt(BlockingStructure))
+	{
+		BlockingStructure = UTIL_GetAnyStructureOfTypeNearUnbuiltHive(STRUCTURE_MARINE_ANYTURRETFACTORY, bAllowElectrified);
+
+		if (FNullEnt(BlockingStructure))
+		{
+			BlockingStructure = UTIL_GetAnyStructureOfTypeNearUnbuiltHive(STRUCTURE_MARINE_ANYTURRET, bAllowElectrified);
+		}
+	}
+
+	if (!FNullEnt(BlockingStructure))
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = BlockingStructure;
+		Task->TaskLocation = BlockingStructure->v.origin;
+
+		return;
+	}
+
+	edict_t* InfPortal = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_INFANTRYPORTAL);
+
+	if (InfPortal)
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = InfPortal;
+		Task->TaskLocation = InfPortal->v.origin;
+		Task->bOrderIsUrgent = false;
+		return;
+	}
+
+	edict_t* Armslab = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_ARMSLAB);
+
+	if (Armslab)
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = Armslab;
+		Task->TaskLocation = Armslab->v.origin;
+		Task->bOrderIsUrgent = false;
+		return;
+	}
+
+	edict_t* Obs = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_OBSERVATORY);
+
+	if (Obs)
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = Obs;
+		Task->TaskLocation = Obs->v.origin;
+		Task->bOrderIsUrgent = false;
+		return;
+	}
+
+	edict_t* CommChair = UTIL_GetCommChair();
+
+	if (CommChair)
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = CommChair;
+		Task->TaskLocation = CommChair->v.origin;
+		Task->bOrderIsUrgent = false;
+		return;
+	}
+
+	edict_t* EnemyPlayer = UTIL_GetNearestPlayerOfTeamInArea(pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(100.0f), MARINE_TEAM, nullptr, CLASS_NONE);
+
+	if (!FNullEnt(EnemyPlayer))
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = EnemyPlayer;
+		Task->TaskLocation = EnemyPlayer->v.origin;
+		Task->bTargetIsPlayer = true;
+		return;
+	}
+}
 
 void AlienHarasserSetPrimaryTask(bot_t* pBot, bot_task* Task)
 {
@@ -4150,7 +4387,7 @@ void AlienProgressHealTask(bot_t* pBot, bot_task* Task)
 {
 	if (!IsPlayerGorge(pBot->pEdict) || FNullEnt(Task->TaskTarget)) { return; }
 
-	if (UTIL_PlayerInUseRange(pBot->pEdict, Task->TaskTarget))
+	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Task->TaskTarget, UTIL_GetMaxIdealWeaponRange(WEAPON_GORGE_HEALINGSPRAY), false))
 	{
 		LookAt(pBot, Task->TaskTarget);
 		if (UTIL_GetBotCurrentWeapon(pBot) != WEAPON_GORGE_HEALINGSPRAY)
@@ -4160,7 +4397,6 @@ void AlienProgressHealTask(bot_t* pBot, bot_task* Task)
 		}
 
 		pBot->pEdict->v.button |= IN_ATTACK;
-		
 	}
 	else
 	{
@@ -4830,6 +5066,21 @@ void BotProgressGuardTask(bot_t* pBot, bot_task* Task)
 
 }
 
+float UTIL_GetProjectileVelocityForWeapon(const NSWeapon Weapon)
+{
+	switch (Weapon)
+	{
+		case WEAPON_GORGE_SPIT:
+			return (float)kSpitVelocity;
+		case WEAPON_LERK_SPORES:
+			return (float)kShootCloudVelocity;
+		case WEAPON_FADE_ACIDROCKET:
+			return (float)kAcidRocketVelocity;
+		default:
+			return 0.0f; // Hitscan. We don't bother with bile bomb as it's so short range that it doesn't really need leading the target
+	}
+}
+
 float UTIL_GetMaxIdealWeaponRange(const NSWeapon Weapon)
 {
 	switch (Weapon)
@@ -4854,13 +5105,19 @@ float UTIL_GetMaxIdealWeaponRange(const NSWeapon Weapon)
 		case WEAPON_SKULK_XENOCIDE:
 			return UTIL_MetresToGoldSrcUnits(5.0f);
 		case WEAPON_ONOS_GORE:
+			return kClawsRange;
 		case WEAPON_ONOS_DEVOUR:
-			return UTIL_MetresToGoldSrcUnits(1.5f);
+			return kDevourRange;
 		case WEAPON_FADE_SWIPE:
+			return kSwipeRange;
 		case WEAPON_SKULK_BITE:
-			return 64.0f;
+			return kBiteRange;
+		case WEAPON_LERK_BITE:
+			return kBite2Range;
+		case WEAPON_GORGE_HEALINGSPRAY:
+			return kHealingSprayRange;
 		default:
-			return 48.0f;
+			return 32.0f;
 	}
 }
 
@@ -4935,11 +5192,8 @@ void BotProgressAttackTask(bot_t* pBot, bot_task* Task)
 			{
 				AttackWeapon = UTIL_GetBotAlienPrimaryWeapon(pBot);
 			}
-
-			
 		}
 	}
-
 
 	float MaxRange = UTIL_GetMaxIdealWeaponRange(AttackWeapon);
 	bool bHullSweep = UTIL_IsMeleeWeapon(AttackWeapon);
@@ -5550,24 +5804,150 @@ bool UTIL_WeaponNeedsReloading(const NSWeapon CheckWeapon)
 	}
 }
 
-void BotAttackTarget(bot_t* pBot, edict_t* Target)
+void DEBUG_BotAttackTarget(bot_t* pBot, edict_t* Target)
 {
 	if (FNullEnt(Target) || (Target->v.deadflag != DEAD_NO)) { return; }
 
-	Vector AimLocation = UTIL_GetCentreOfEntity(Target);
-
 	NSWeapon CurrentWeapon = UTIL_GetBotCurrentWeapon(pBot);
+
+	Vector TargetAimDir = ZERO_VECTOR;
 
 	if (CurrentWeapon == WEAPON_MARINE_GL || CurrentWeapon == WEAPON_MARINE_GRENADE)
 	{
+		Vector AimLocation = UTIL_GetCentreOfEntity(Target);
 		Vector NewAimAngle = GetPitchForProjectile(pBot->CurrentEyePosition, AimLocation, 800.0f, 640.0f);
 
 		NewAimAngle = UTIL_GetVectorNormal(NewAimAngle);
 
-		Vector AimLocation = pBot->CurrentEyePosition + (NewAimAngle * 200.0f);
+		AimLocation = pBot->CurrentEyePosition + (NewAimAngle * 200.0f);
+
+		LookAt(pBot, AimLocation);
+		TargetAimDir = UTIL_GetVectorNormal(AimLocation - pBot->CurrentEyePosition);
+	}
+	else
+	{
+		LookAt(pBot, Target);
+		TargetAimDir = UTIL_GetVectorNormal(UTIL_GetCentreOfEntity(Target) - pBot->CurrentEyePosition);
 	}
 
-	LookAt(pBot, AimLocation);
+
+
+	// Don't need aiming or LOS checks for Xenocide as it's an AOE attack, just make sure we're close enough
+	if (CurrentWeapon == WEAPON_SKULK_XENOCIDE)
+	{
+		float MaxXenoDist = UTIL_GetMaxIdealWeaponRange(CurrentWeapon);
+
+		if (vDist3DSq(pBot->pEdict->v.origin, Target->v.origin) <= sqrf(MaxXenoDist))
+		{
+			pBot->pEdict->v.button |= IN_ATTACK;
+			pBot->current_weapon.LastFireTime = gpGlobals->time;
+			return;
+		}
+	}
+
+	if (UTIL_IsMeleeWeapon(CurrentWeapon))
+	{
+		if (UTIL_PlayerInUseRange(pBot->pEdict, Target))
+		{
+			Vector DirToTarget = UTIL_GetVectorNormal2D(Target->v.origin - pBot->pEdict->v.origin);
+			float DotProduct = UTIL_GetDotProduct2D(UTIL_GetForwardVector(pBot->pEdict->v.v_angle), DirToTarget);
+
+			if (DotProduct >= 0.45f)
+			{
+				pBot->pEdict->v.button |= IN_ATTACK;
+				pBot->current_weapon.LastFireTime = gpGlobals->time;
+			}
+		}
+
+		return;
+	}
+
+	// For charge and stomp, we don't need to be precise about aiming: only facing the correct direction
+	if (CurrentWeapon == WEAPON_ONOS_CHARGE || CurrentWeapon == WEAPON_ONOS_STOMP)
+	{
+		Vector DirToTarget = UTIL_GetVectorNormal2D(Target->v.origin - pBot->pEdict->v.origin);
+		float DotProduct = UTIL_GetDotProduct2D(UTIL_GetForwardVector(pBot->pEdict->v.v_angle), DirToTarget);
+
+		float MinDotProduct = (CurrentWeapon == WEAPON_ONOS_STOMP) ? 0.95f : 0.75f;
+
+		if (DotProduct >= MinDotProduct)
+		{
+			if (CurrentWeapon == WEAPON_ONOS_CHARGE)
+			{
+				pBot->pEdict->v.button |= IN_ATTACK2;
+			}
+			else
+			{
+				pBot->pEdict->v.button |= IN_ATTACK;
+			}
+
+			pBot->current_weapon.LastFireTime = gpGlobals->time;
+		}
+
+		return;
+	}
+
+	if (UTIL_WeaponNeedsReloading(CurrentWeapon) && BotGetCurrentWeaponClipAmmo(pBot) == 0)
+	{
+		if (BotGetCurrentWeaponReserveAmmo(pBot) > 0)
+		{
+			pBot->pEdict->v.button |= IN_RELOAD;
+		}
+		return;
+	}
+
+	if ((gpGlobals->time - pBot->current_weapon.LastFireTime) < pBot->current_weapon.MinRefireTime)
+	{
+		return;
+	}
+
+	float MaxWeaponRange = UTIL_GetMaxIdealWeaponRange(CurrentWeapon);
+	bool bHullSweep = UTIL_IsMeleeWeapon(CurrentWeapon);
+
+	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Target, MaxWeaponRange, bHullSweep))
+	{
+		Vector AimDir = UTIL_GetForwardVector(pBot->pEdict->v.v_angle);
+
+		float AimDot = UTIL_GetDotProduct(AimDir, TargetAimDir);
+
+		if (AimDot >= 0.90f)
+		{
+			UTIL_DrawLine(clients[0], pBot->CurrentEyePosition, pBot->CurrentEyePosition + (AimDir * 500.0f), 255, 255, 0);
+		}
+		else
+		{
+			UTIL_DrawLine(clients[0], pBot->CurrentEyePosition, pBot->CurrentEyePosition + (AimDir * 500.0f));
+		}
+	}
+}
+
+void BotAttackTarget(bot_t* pBot, edict_t* Target)
+{
+	if (FNullEnt(Target) || (Target->v.deadflag != DEAD_NO)) { return; }
+
+	NSWeapon CurrentWeapon = UTIL_GetBotCurrentWeapon(pBot);
+
+	Vector TargetAimDir = ZERO_VECTOR;
+
+	if (CurrentWeapon == WEAPON_MARINE_GL || CurrentWeapon == WEAPON_MARINE_GRENADE)
+	{
+		Vector AimLocation = UTIL_GetCentreOfEntity(Target);
+		Vector NewAimAngle = GetPitchForProjectile(pBot->CurrentEyePosition, AimLocation, 800.0f, 640.0f);
+
+		NewAimAngle = UTIL_GetVectorNormal(NewAimAngle);
+
+		AimLocation = pBot->CurrentEyePosition + (NewAimAngle * 200.0f);
+
+		LookAt(pBot, AimLocation);
+		TargetAimDir = UTIL_GetVectorNormal(AimLocation - pBot->CurrentEyePosition);
+	}
+	else
+	{
+		LookAt(pBot, Target);
+		TargetAimDir = UTIL_GetVectorNormal(UTIL_GetCentreOfEntity(Target) - pBot->CurrentEyePosition);
+	}
+
+	
 
 	// Don't need aiming or LOS checks for Xenocide as it's an AOE attack, just make sure we're close enough
 	if (CurrentWeapon == WEAPON_SKULK_XENOCIDE)
@@ -5644,11 +6024,11 @@ void BotAttackTarget(bot_t* pBot, edict_t* Target)
 	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Target, MaxWeaponRange, bHullSweep))
 	{
 		Vector AimDir = UTIL_GetForwardVector(pBot->pEdict->v.v_angle);
-		Vector TargetAimDir = UTIL_GetVectorNormal(UTIL_GetCentreOfEntity(Target) - pBot->CurrentEyePosition);
+		
 
 		float AimDot = UTIL_GetDotProduct(AimDir, TargetAimDir);
 
-		if (AimDot >= 0.95f)
+		if (AimDot >= 0.90f)
 		{
 			pBot->pEdict->v.button |= IN_ATTACK;
 			pBot->current_weapon.LastFireTime = gpGlobals->time;
@@ -5867,7 +6247,10 @@ int UTIL_StructureTypeToImpulseCommand(const NSStructureType StructureType)
 }
 
 
-
+bool IsPlayerActiveInGame(const edict_t* Player)
+{
+	return !IsPlayerInReadyRoom(Player) && Player->v.team != 0 && !IsPlayerSpectator(Player) && !IsPlayerDead(Player) && !IsPlayerBeingDigested(Player) && !IsPlayerCommander(Player);
+}
 
 bool IsPlayerInReadyRoom(const edict_t* Player)
 {

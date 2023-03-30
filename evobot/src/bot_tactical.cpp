@@ -1093,6 +1093,24 @@ edict_t* UTIL_GetAnyStructureOfTypeNearActiveHive(const NSStructureType Structur
 	return nullptr;
 }
 
+edict_t* UTIL_GetAnyStructureOfTypeNearUnbuiltHive(const NSStructureType StructureType, bool bAllowElectrical)
+{
+	for (int i = 0; i < NumTotalHives; i++)
+	{
+		if (Hives[i].Status == HIVE_STATUS_UNBUILT)
+		{
+			edict_t* ThreateningPhaseGate = UTIL_GetNearestStructureOfTypeInLocation(StructureType, Hives[i].FloorLocation, UTIL_MetresToGoldSrcUnits(30.0f), bAllowElectrical);
+
+			if (!FNullEnt(ThreateningPhaseGate) && UTIL_StructureIsFullyBuilt(ThreateningPhaseGate))
+			{
+				return ThreateningPhaseGate;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
 edict_t* UTIL_GetFirstCompletedStructureOfType(const NSStructureType StructureType)
 {
 	bool bIsMarineStructure = UTIL_IsMarineStructure(StructureType);

@@ -34,8 +34,10 @@ typedef struct _FRUSTUM_PLANE_T
 
 // GENERAL MATH
 
-// Is the input string a valid number?
+// Is the input string a valid integer?
 bool isNumber(const char* line);
+// Is the input string a valid floating point number?
+bool isFloat(const char* line);
 // Square the input
 float sqrf(float input);
 // Return the sign (-1 if number is negative, 1 if positive, 0 if 0)
@@ -163,5 +165,7 @@ bool UTIL_CylinderInsidePlane(const frustum_plane_t* plane, const Vector& centre
 void UTIL_SetFrustumPlane(frustum_plane_t* plane, Vector v1, Vector v2, Vector v3);
 // Finds the closest point to the polygon, defined by segments (edges)
 float UTIL_GetDistanceToPolygon2DSq(const Vector TestPoint, const Vector* Segments, const int NumSegments);
+
+Vector UTIL_GetAimLocationToLeadTarget(const Vector ShooterLocation, const Vector TargetLocation, const Vector TargetVelocity, const float ProjectileVelocity);
 
 #endif

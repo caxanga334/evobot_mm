@@ -52,7 +52,8 @@ typedef enum _EVODEBUGMODE
 {
 	EVO_DEBUG_NONE = 0, // Bot plays game normally
 	EVO_DEBUG_TESTNAV, // Bot randomly navigates between resource nodes and comm chair, will not enagage enemies
-	EVO_DEBUG_DRONE // Bot does nothing unless given task by player, will not engage enemies unless given attack order
+	EVO_DEBUG_DRONE, // Bot does nothing unless given task by player, will not engage enemies unless given attack order
+	EVO_DEBUG_AIM // Bot just aims at an enemy and indicates where it's aiming and whether it would fire or hit
 } EvobotDebugMode;
 
 // Type of goal the commander wants to achieve
@@ -182,12 +183,17 @@ typedef struct _ENEMY_STATUS
 	edict_t* EnemyEdict = nullptr; // Reference to the enemy player edict
 	Vector LastSeenLocation = ZERO_VECTOR; // The last visibly-confirmed location of the player
 	Vector LastSeenVelocity = ZERO_VECTOR; // Last visibly-confirmed movement direction of the player
+	Vector PendingSeenLocation = ZERO_VECTOR; // The last visibly-confirmed location of the player
+	Vector PendingSeenVelocity = ZERO_VECTOR; // Last visibly-confirmed movement direction of the player
 	Vector TrackedLocation = ZERO_VECTOR; // If tracked by parasite or motion-tracking, last pinged location of player
 	float LastSeenTime = 0.0f; // Last time the bot saw the player (not tracked)
 	float LastTrackedTime = 0.0f; // Last time the player was pinged to the bot if parasited/motion-tracked
 	bool bCurrentlyVisible = false; // Is the player directly visible to the bot
 	bool bIsValidTarget = false; // Should the bot care about this enemy player? Will be false if too far away or not seen for long enough
 	bool bIsTracked = false; // Is this enemy currently parasited or motion-tracked?
+	float NextUpdateTime = 0.0f; // When the bot can next react to a change in target's state
+	float NextVelocityUpdateTime = 0.0f; // When the bot can next react to a change in target's state
+
 } enemy_status;
 
 // Pending message a bot wants to say. Allows for a delay in sending a message to simulate typing, or prevent too many messages on the same frame
@@ -252,12 +258,22 @@ typedef struct _COMMANDER_ORDER
 
 } commander_order;
 
+// Tracks what orders have been given to which players
+typedef struct _BOT_SKILL
+{
+	float bot_reaction_time = 0.2f; // How quickly the bot will react to seeing an enemy
+	float bot_aim_skill = 0.5f; // How quickly the bot can lock on to an enemy
+	float bot_motion_tracking_skill = 0.5f; // How well the bot can follow an enemy target's motion
+	float bot_view_speed = 0.5f; // How fast a bot can spin its view to aim in a given direction
 
+} bot_skill;
 
 // Bot data structure. Holds all things a growing bot needs
 typedef struct _BOT_T
 {
 	bool is_used = false;
+
+	bot_skill BotSkillSettings;
 
 	float map_max_extent = 0.0f; // The commander's Z height when in top-down view. Set by the SetupMap network message
 
@@ -284,8 +300,6 @@ typedef struct _BOT_T
 	nav_status BotNavInfo; // Bot's movement information, their current path, where in the path they are etc.
 
 	frustum_plane_t viewFrustum[6]; // Bot's view frustum. Essentially, their "screen" for determining visibility of stuff
-
-	edict_t* visiblePlayers[32]; // List of all potentially visible players that bot might track. Right now, is only interested in enemies
 
 	float f_previous_command_time = 0.0f;
 

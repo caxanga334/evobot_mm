@@ -282,6 +282,7 @@ void BotAlienCheckDefendTargets(bot_t* pBot, bot_task* Task);
 void BotMarineSetSecondaryTask(bot_t* pBot, bot_task* Task);
 
 void AlienHarasserSetPrimaryTask(bot_t* pBot, bot_task* Task);
+void AlienDestroyerSetPrimaryTask(bot_t* pBot, bot_task* Task);
 void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task);
 void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task);
 
@@ -429,6 +430,8 @@ bool IsPlayerCommander(const edict_t* Player);
 bool IsPlayerClimbingWall(const edict_t* Player);
 // Is the player in the ready room (i.e. not in the map proper)?
 bool IsPlayerInReadyRoom(const edict_t* Player);
+// Returns true if the player is not in the ready room, is on a team, is alive, is not being digested, and is not commander
+bool IsPlayerActiveInGame(const edict_t* Player);
 // Is the player a human?
 bool IsPlayerHuman(const edict_t* Player);
 // Is the player a bot (includes non-EvoBot fake clients)?
@@ -502,6 +505,8 @@ int UTIL_GetDesiredAlienUpgrade(const bot_t* pBot, const HiveTechStatus TechType
 float UTIL_GetMaxIdealWeaponRange(const NSWeapon Weapon);
 float UTIL_GetMinIdealWeaponRange(const NSWeapon Weapon);
 
+float UTIL_GetProjectileVelocityForWeapon(const NSWeapon Weapon);
+
 // Returns true if the given weapon is a melee one
 bool UTIL_IsMeleeWeapon(const NSWeapon Weapon);
 
@@ -527,6 +532,8 @@ void MoveLookAt(bot_t* pBot, Vector target);
 void LookAt(bot_t* pBot, Vector target);
 void LookAt(bot_t* pBot, edict_t* target);
 
+void DEBUG_BotAttackTarget(bot_t* pBot, edict_t* Target);
+
 // Will aim at the target and attack if target is in range and the bot is aiming at it correctly. Does not handle movement
 void BotAttackTarget(bot_t* pBot, edict_t* Target);
 
@@ -551,7 +558,6 @@ void BotDied(bot_t* pBot, edict_t* killer);
 void BotKilledPlayer(bot_t* pBot, edict_t* victim);
 // Used so the bot can react to being hurt by an enemy that's out of sight. Without this, they'll let you kill them unless they directly see you
 void BotTakeDamage(bot_t* pBot, int damageTaken, edict_t* aggressor);
-void BotSeePlayer(bot_t* pBot, edict_t* seen);
 void BotSay(bot_t* pBot, char* textToSay);
 void BotSay(bot_t* pBot, float Delay, char* textToSay);
 void BotTeamSay(bot_t* pBot, char* textToSay);

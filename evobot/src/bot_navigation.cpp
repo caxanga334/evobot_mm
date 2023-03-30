@@ -885,10 +885,11 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_PHASEGATE, 0.1f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_FALL, 1.0f);
-	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_LADDER, 1.0f);
+	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_LADDER, 2.0f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 1.0f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 1.0f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 2.0f);
+	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_WALLCLIMB, 1.0f);
 
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
@@ -1897,13 +1898,8 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 			{
 				return (vDist2D(pEdict->v.origin, CurrentMoveDest) <= playerRadius && (pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f && pBot->BotNavInfo.IsOnGround);
 			}
-			break;
-
 		case SAMPLE_POLYAREA_WALLCLIMB:
 			return ((bAtOrPastDestination && (fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f)));
-				//|| (!bIsAtFinalPathPoint && UTIL_PointIsDirectlyReachable(pBot, CurrentPos, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location)) );
-			break;
-
 		case SAMPLE_POLYAREA_LADDER:
 			if (CurrentMoveDest.z > PrevMoveDest.z)
 			{
@@ -1913,11 +1909,8 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 			{
 				return ((BotPoly == DestinationPoly) && fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f);
 			}
-			break;
-
 		default:
 			return (bAtOrPastDestination && UTIL_QuickTrace(pEdict, pEdict->v.origin, CurrentMoveDest));
-			break;
 	}
 
 	return false;
@@ -2596,7 +2589,7 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 	}
 
 	// Jump if we're on the floor, to give ourselves a boost and remove that momentary pause while "wall-sticking" mode activates if skulk
-	if (pEdict->v.flags & FL_ONGROUND)
+	if ((pEdict->v.flags & FL_ONGROUND) && !IsPlayerClimbingWall(pEdict))
 	{
 		BotJump(pBot);
 	}

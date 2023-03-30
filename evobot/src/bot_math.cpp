@@ -13,6 +13,9 @@
 #include <meta_api.h>
 #include <time.h>
 
+#include <string>
+#include <sstream>
+
 extern enginefuncs_t g_engfuncs;
 
 bool isNumber(const char* line)
@@ -20,6 +23,16 @@ bool isNumber(const char* line)
 	char* p;
 	strtol(line, &p, 10);
 	return *p == 0;
+}
+
+bool isFloat(const char* line)
+{
+	std::string myString = line;
+	std::istringstream iss(myString);
+	float f;
+	iss >> std::noskipws >> f; // noskipws considers leading whitespace invalid
+	// Check the entire string was consumed and if either failbit or badbit is set
+	return iss.eof() && !iss.fail();
 }
 
 // Returns the normalized surface normal of a triangle defined by v1,v2,v3. Assumes clockwise indices.
@@ -601,4 +614,36 @@ float UTIL_GetDistanceToPolygon2DSq(const Vector TestPoint, const Vector* Points
 	}
 
 	return minDist;
+}
+
+Vector UTIL_GetAimLocationToLeadTarget(const Vector ShooterLocation, const Vector TargetLocation, const Vector TargetVelocity, const float ProjectileVelocity)
+{
+	// We interpret a speed of 0.0f to mean hitscan, i.e. infinitely fast
+	if (ProjectileVelocity == 0.0f) { return TargetLocation; }
+
+
+	Vector totarget = TargetLocation - ShooterLocation;
+
+
+	float a = UTIL_GetDotProduct(TargetVelocity, TargetVelocity) - (ProjectileVelocity * ProjectileVelocity);
+	float b = 2.0f * UTIL_GetDotProduct(TargetVelocity, totarget);
+	float c = UTIL_GetDotProduct(totarget, totarget);
+
+	float p = -b / (2.0f * a);
+	float q = (float)sqrt((b * b) - 4.0f * a * c) / (2.0f * a);
+
+	float t1 = p - q;
+	float t2 = p + q;
+	float t;
+
+	if (t1 > t2 && t2 > 0)
+	{
+		t = t2;
+	}
+	else
+	{
+		t = t1;
+	}
+
+	return (TargetLocation + TargetVelocity * t);
 }

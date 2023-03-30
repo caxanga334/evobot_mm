@@ -435,6 +435,54 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	if (FStrEq(pcmd, "elitebots"))
+	{
+		for (int i = 0; i < gpGlobals->maxClients; i++)
+		{
+			if (bots[i].is_used)  // not respawning
+			{
+				bots[i].BotSkillSettings.bot_aim_skill = 1.0f;
+				bots[i].BotSkillSettings.bot_motion_tracking_skill = 1.0f;
+				bots[i].BotSkillSettings.bot_reaction_time = 0.05f;
+				bots[i].BotSkillSettings.bot_view_speed = 2.0f;
+			}
+		}
+
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
+	if (FStrEq(pcmd, "normalbots"))
+	{
+		for (int i = 0; i < gpGlobals->maxClients; i++)
+		{
+			if (bots[i].is_used)  // not respawning
+			{
+				bots[i].BotSkillSettings.bot_aim_skill = 0.5f;
+				bots[i].BotSkillSettings.bot_motion_tracking_skill = 0.5f;
+				bots[i].BotSkillSettings.bot_reaction_time = 0.2f;
+				bots[i].BotSkillSettings.bot_view_speed = 1.0f;
+			}
+		}
+
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
+	if (FStrEq(pcmd, "lamebots"))
+	{
+		for (int i = 0; i < gpGlobals->maxClients; i++)
+		{
+			if (bots[i].is_used)  // not respawning
+			{
+				bots[i].BotSkillSettings.bot_aim_skill = 0.0f;
+				bots[i].BotSkillSettings.bot_motion_tracking_skill = 0.0f;
+				bots[i].BotSkillSettings.bot_reaction_time = 0.5f;
+				bots[i].BotSkillSettings.bot_view_speed = 0.7f;
+			}
+		}
+
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
 	if (FStrEq(pcmd, "traceentity"))
 	{
 
@@ -1408,6 +1456,9 @@ void StartFrame(void)
 								case EVO_DEBUG_DRONE:
 									DroneThink(bot);
 									break;
+								case EVO_DEBUG_AIM:
+									TestAimThink(bot);
+									break;
 								default:
 									BotThink(bot);
 									break;
@@ -1620,6 +1671,35 @@ void EvoBot_ServerCommand(void)
 		return;
 	}
 
+	if (FStrEq(arg1, "botskill"))
+	{
+		const char* BotSkill = CMD_ARGV(2);
+
+		if (!BotSkill)
+		{
+			LOG_CONSOLE(PLID, "Please specify a bot skill. See evobot.cfg for valid skill level names\n");
+			return;
+		}
+
+		if (!CONFIG_BotSkillLevelExists(BotSkill))
+		{
+			LOG_CONSOLE(PLID, "Bot skill level '%s' does not exist. See evobot.cfg for valid skill level names\n", BotSkill);
+			return;
+		}
+
+		CONFIG_SetGlobalBotSkillLevel(BotSkill);
+
+		const bot_skill FoundSkill = CONFIG_GetBotSkillLevel(BotSkill);
+		
+		for (int i = 0; i < 32; i++)
+		{
+			if (bots[i].is_used)
+			{
+				memcpy(&bots[i].BotSkillSettings, &FoundSkill, sizeof(bot_skill));				
+			}
+		}
+	}
+
 	if (FStrEq(arg1, "commandermode"))
 	{
 		const char* CommMode = CMD_ARGV(2);
@@ -1700,6 +1780,20 @@ void EvoBot_ServerCommand(void)
 		if (FStrEq(DebugMode, "drone"))
 		{
 			CurrentDebugMode = EVO_DEBUG_DRONE;
+
+			for (int i = 0; i < 32; i++)
+			{
+				UTIL_ClearBotTask(&bots[i], &bots[i].PrimaryBotTask);
+				UTIL_ClearBotTask(&bots[i], &bots[i].SecondaryBotTask);
+				UTIL_ClearBotTask(&bots[i], &bots[i].WantsAndNeedsTask);
+			}
+
+			return;
+		}
+
+		if (FStrEq(DebugMode, "aim"))
+		{
+			CurrentDebugMode = EVO_DEBUG_AIM;
 
 			for (int i = 0; i < 32; i++)
 			{
