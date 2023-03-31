@@ -818,19 +818,6 @@ void DroneThink(bot_t* pBot)
 	if (pBot->BotNavInfo.PathSize > 0)
 	{
 		DEBUG_DrawPath(pBot->BotNavInfo.CurrentPath, pBot->BotNavInfo.PathSize, 0.0f);
-		DEBUG_DrawBotNextPathPoint(pBot);
-
-		Vector MoveDir = UTIL_GetVectorNormal2D(pBot->desiredMovementDir);
-		Vector EndLine = pBot->pEdict->v.origin + (MoveDir * 50.0f);
-
-		if (pBot->pEdict->v.button & IN_JUMP)
-		{
-			UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, EndLine, 255, 0, 0);
-		}
-		else
-		{
-			UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, EndLine);
-		}
 	}
 }
 
@@ -5922,6 +5909,30 @@ void BotAttackTarget(bot_t* pBot, edict_t* Target)
 
 	NSWeapon CurrentWeapon = UTIL_GetBotCurrentWeapon(pBot);
 
+	if (UTIL_IsMeleeWeapon(CurrentWeapon))
+	{
+		LookAt(pBot, Target);
+		Vector TargetAimDir = UTIL_GetVectorNormal(UTIL_GetCentreOfEntity(Target) - pBot->CurrentEyePosition);
+
+		float MaxWeaponRange = UTIL_GetMaxIdealWeaponRange(CurrentWeapon);
+
+		if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Target, MaxWeaponRange, true))
+		{
+			Vector AimDir = UTIL_GetForwardVector(pBot->pEdict->v.v_angle);
+
+
+			float AimDot = UTIL_GetDotProduct(AimDir, TargetAimDir);
+
+			if (AimDot >= 0.90f)
+			{
+				pBot->pEdict->v.button |= IN_ATTACK;
+				pBot->current_weapon.LastFireTime = gpGlobals->time;
+			}
+		}
+
+		return;
+	}
+
 	Vector TargetAimDir = ZERO_VECTOR;
 
 	if (CurrentWeapon == WEAPON_MARINE_GL || CurrentWeapon == WEAPON_MARINE_GRENADE)
@@ -5957,22 +5968,7 @@ void BotAttackTarget(bot_t* pBot, edict_t* Target)
 		}
 	}
 
-	if (UTIL_IsMeleeWeapon(CurrentWeapon))
-	{
-		if (UTIL_PlayerInUseRange(pBot->pEdict, Target))
-		{
-			Vector DirToTarget = UTIL_GetVectorNormal2D(Target->v.origin - pBot->pEdict->v.origin);
-			float DotProduct = UTIL_GetDotProduct2D(UTIL_GetForwardVector(pBot->pEdict->v.v_angle), DirToTarget);
 
-			if (DotProduct >= 0.45f)
-			{
-				pBot->pEdict->v.button |= IN_ATTACK;
-				pBot->current_weapon.LastFireTime = gpGlobals->time;
-			}
-		}
-
-		return;
-	}
 
 	// For charge and stomp, we don't need to be precise about aiming: only facing the correct direction
 	if (CurrentWeapon == WEAPON_ONOS_CHARGE || CurrentWeapon == WEAPON_ONOS_STOMP)
@@ -6014,13 +6010,11 @@ void BotAttackTarget(bot_t* pBot, edict_t* Target)
 	}
 
 	float MaxWeaponRange = UTIL_GetMaxIdealWeaponRange(CurrentWeapon);
-	bool bHullSweep = UTIL_IsMeleeWeapon(CurrentWeapon);
 
-	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Target, MaxWeaponRange, bHullSweep))
+	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Target, MaxWeaponRange, false))
 	{
 		Vector AimDir = UTIL_GetForwardVector(pBot->pEdict->v.v_angle);
 		
-
 		float AimDot = UTIL_GetDotProduct(AimDir, TargetAimDir);
 
 		if (AimDot >= 0.90f)

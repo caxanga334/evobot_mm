@@ -243,6 +243,8 @@ bool IsBotStuck(bot_t* pBot, const Vector MoveDestination);
 // Called every bot frame (default is 60fps). Ensures the tile cache is updated after obstacles are placed
 void UTIL_UpdateTileCache();
 
+void RecalcAllBotPaths();
+
 /*	Places a temporary obstacle of the given height and radius on the mesh.Will modify that part of the nav mesh to be the given area.
 	An example use case is to place an obstacle of area type SAMPLE_POLYAREA_OBSTRUCTION to mark where buildings are.
 	Using DT_AREA_NULL will effectively cut a hole in the nav mesh, meaning it's no longer considered a valid mesh position.

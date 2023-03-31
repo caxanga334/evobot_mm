@@ -175,6 +175,8 @@ typedef struct _NAV_STATUS
 	float LastPathCalcTime = 0.0f; // When the bot last calculated a path, to limit how frequently it can recalculate
 	int LastMoveProfile = -1; // The last navigation profile used by the bot. Will trigger new path calculations if this changes (e.g. changed class, changed move style)
 
+	bool bPendingRecalculation = false; // This bot should recalculate its path as soon as it can
+
 } nav_status;
 
 // Represents a bot's current understanding of an enemy player's status

@@ -358,22 +358,23 @@ void ClientCommand(edict_t *pEntity)
 			RETURN_META(MRES_SUPERCEDE);
 		}
 
-		for (int i = 0; i < gpGlobals->maxClients; i++)
-		{
-			if (bots[i].is_used && bots[i].pEdict->v.team == MARINE_TEAM)  // not respawning
-			{
-				const resource_node* ResNode = UTIL_GetNearestCappedResNodeToLocation(bots[i].pEdict->v.origin, ALIEN_TEAM, true);
+		edict_t* PhaseGate = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_PHASEGATE);
 
-				if (ResNode)
+		if (!FNullEnt(PhaseGate))
+		{
+			for (int i = 0; i < gpGlobals->maxClients; i++)
+			{
+				if (bots[i].is_used)  // not respawning
 				{
 					bots[i].PrimaryBotTask.TaskType = TASK_ATTACK;
-					bots[i].PrimaryBotTask.TaskTarget = ResNode->TowerEdict;
-					bots[i].PrimaryBotTask.TaskLocation = ResNode->origin;
+					bots[i].PrimaryBotTask.TaskLocation = PhaseGate->v.origin;
+					bots[i].PrimaryBotTask.TaskTarget = PhaseGate;
 					bots[i].PrimaryBotTask.bOrderIsUrgent = true;
 				}
 			}
 		}
 
+		
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
@@ -413,9 +414,9 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "testelectrical"))
+	if (FStrEq(pcmd, "testattack"))
 	{
-		edict_t* Structure = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_RESTOWER);
+		edict_t* Structure = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_PHASEGATE);
 
 		if (Structure)
 		{

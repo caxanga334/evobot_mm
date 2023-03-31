@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-
+extern bot_t bots[32];
 extern edict_t* clients[32];
 
 extern hive_definition Hives[10];
@@ -307,27 +307,6 @@ struct MeshProcess : public dtTileCacheMeshProcess
 				polyAreas[i] = SAMPLE_POLYAREA_MSTRUCTURE;
 				polyFlags[i] = SAMPLE_POLYFLAGS_MSTRUCTURE;
 			}
-
-			/*if (polyAreas[i] == SAMPLE_POLYAREA_GROUND)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_WALK;
-			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_WATER)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_SWIM;
-			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_DOOR)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_WALK | SAMPLE_POLYFLAGS_DOOR;
-			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_CROUCH)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_CROUCH;
-			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_PHASEGATE)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_PHASEGATE;
-			}*/
 		}
 
 		params->offMeshConAreas = OffMeshAreas;
@@ -469,6 +448,20 @@ void UTIL_DrawTemporaryObstacles()
 	}
 }
 
+void RecalcAllBotPaths()
+{
+	for (int i = 0; i < 32; i++)
+	{
+		if (bots[i].is_used)
+		{
+			if (bots[i].BotNavInfo.PathSize > 0)
+			{
+				bots[i].BotNavInfo.bPendingRecalculation = true;
+			}
+		}
+	}
+}
+
 unsigned int UTIL_AddTemporaryObstacle(const Vector Location, float Radius, float Height, int area)
 {
 	unsigned int ObstacleNum = 0;
@@ -484,6 +477,11 @@ unsigned int UTIL_AddTemporaryObstacle(const Vector Location, float Radius, floa
 
 			ObstacleNum = (unsigned int)ObsRef;
 		}
+	}
+
+	if (ObstacleNum > 0)
+	{
+		RecalcAllBotPaths();
 	}
 
 	return ObstacleNum;
@@ -574,6 +572,8 @@ void UTIL_RemoveTemporaryObstacle(unsigned int ObstacleRef)
 			NavMeshes[i].tileCache->removeObstacle((dtObstacleRef)ObstacleRef);
 		}
 	}
+
+	RecalcAllBotPaths();
 }
 
 void GetFullFilePath(char* buffer, const char* mapname)
@@ -3690,7 +3690,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 	bool bDestinationChanged = (Destination != BotNavInfo->TargetDestination);
 
 	// Only recalculate the path if there isn't a path, or something has changed and enough time has elapsed since the last path calculation
-	bool bShouldCalculatePath = (BotNavInfo->PathSize == 0 || (bCanRecalculatePath && (bMoveStyleChanged || bNavProfileChanged || bDestinationChanged)));
+	bool bShouldCalculatePath = (BotNavInfo->PathSize == 0 || (bCanRecalculatePath && (bMoveStyleChanged || bNavProfileChanged || bDestinationChanged || BotNavInfo->bPendingRecalculation)));
 
 	UTIL_UpdateBotMovementStatus(pBot);
 
@@ -3703,6 +3703,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 		}
 
 		pBot->BotNavInfo.LastPathCalcTime = gpGlobals->time;
+		BotNavInfo->bPendingRecalculation = false;
 
 		pBot->BotNavInfo.MoveStyle = MoveStyle;
 		pBot->BotNavInfo.LastMoveProfile = MoveProfile;
