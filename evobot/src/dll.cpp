@@ -435,53 +435,24 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "elitebots"))
+	if (FStrEq(pcmd, "drawobstacles"))
 	{
-		for (int i = 0; i < gpGlobals->maxClients; i++)
-		{
-			if (bots[i].is_used)  // not respawning
-			{
-				bots[i].BotSkillSettings.bot_aim_skill = 1.0f;
-				bots[i].BotSkillSettings.bot_motion_tracking_skill = 1.0f;
-				bots[i].BotSkillSettings.bot_reaction_time = 0.05f;
-				bots[i].BotSkillSettings.bot_view_speed = 2.0f;
-			}
-		}
+		UTIL_DrawTemporaryObstacles();
 
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "normalbots"))
+	if (FStrEq(pcmd, "getnavarea"))
 	{
-		for (int i = 0; i < gpGlobals->maxClients; i++)
-		{
-			if (bots[i].is_used)  // not respawning
-			{
-				bots[i].BotSkillSettings.bot_aim_skill = 0.5f;
-				bots[i].BotSkillSettings.bot_motion_tracking_skill = 0.5f;
-				bots[i].BotSkillSettings.bot_reaction_time = 0.2f;
-				bots[i].BotSkillSettings.bot_view_speed = 1.0f;
-			}
-		}
+		unsigned char area = UTIL_GetNavAreaAtLocation(pEntity->v.origin);
+
+		char buf[32];
+		sprintf(buf, "%s\n", UTIL_NavmeshAreaToChar(area));
+		UTIL_SayText(buf, pEntity);
 
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "lamebots"))
-	{
-		for (int i = 0; i < gpGlobals->maxClients; i++)
-		{
-			if (bots[i].is_used)  // not respawning
-			{
-				bots[i].BotSkillSettings.bot_aim_skill = 0.0f;
-				bots[i].BotSkillSettings.bot_motion_tracking_skill = 0.0f;
-				bots[i].BotSkillSettings.bot_reaction_time = 0.5f;
-				bots[i].BotSkillSettings.bot_view_speed = 0.7f;
-			}
-		}
-
-		RETURN_META(MRES_SUPERCEDE);
-	}
 
 	if (FStrEq(pcmd, "traceentity"))
 	{
@@ -541,23 +512,6 @@ void ClientCommand(edict_t *pEntity)
 
 		RETURN_META(MRES_SUPERCEDE);
 	}
-
-	if (FStrEq(pcmd, "randomangle"))
-	{
-		Vector CurrentAngle = UTIL_GetForwardVector(pEntity->v.v_angle);
-
-		Vector newAngle = random_unit_vector_within_cone(CurrentAngle, 0.087);
-
-		Vector PlayerEyeLocation = UTIL_GetPlayerEyePosition(pEntity);
-
-		UTIL_DrawLine(pEntity, PlayerEyeLocation, PlayerEyeLocation + (CurrentAngle * 1000.0f), 10.0f, 255, 0, 0);
-
-		UTIL_DrawLine(pEntity, PlayerEyeLocation, PlayerEyeLocation + (newAngle * 1000.0f), 10.0f, 255, 255, 0);
-
-
-		RETURN_META(MRES_SUPERCEDE);
-	}
-
 
 	if (FStrEq(pcmd, "showdoors"))
 	{
@@ -921,27 +875,6 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "randommarinepoint"))
-	{
-		if (!NavmeshLoaded())
-		{
-			UTIL_SayText("Navmesh is not loaded", pEntity);
-			RETURN_META(MRES_SUPERCEDE);
-		}
-
-		Vector FoundPoint = UTIL_GetRandomPointOnNavmeshInRadius(MARINE_REGULAR_NAV_PROFILE, UTIL_GetFloorUnderEntity(pEntity), UTIL_MetresToGoldSrcUnits(5.0f));
-
-		if (FoundPoint != ZERO_VECTOR)
-		{
-			UTIL_DrawLine(pEntity, FoundPoint, FoundPoint + Vector(0.0f, 0.0f, 100.0f), 5.0f, 0, 0, 255);
-		}
-		else
-		{
-			UTIL_SayText("Failed to find a point", pEntity);
-		}
-
-		RETURN_META(MRES_SUPERCEDE);
-	}
 
 	RETURN_META(MRES_IGNORED);
 	

@@ -86,6 +86,8 @@ Vector UTIL_GetRandomPointOfInterest();
 
 bool IsAlienTraitCategoryAvailable(HiveTechStatus TraitCategory);
 
+unsigned char UTIL_GetAreaForObstruction(NSStructureType StructureType);
+float UTIL_GetStructureRadiusForObstruction(NSStructureType StructureType);
 bool UTIL_ShouldStructureCollide(NSStructureType StructureType);
 void UTIL_UpdateBuildableStructure(edict_t* Structure);
 
@@ -201,7 +203,9 @@ int UTIL_FindClosestMarinePlayerToLocation(const edict_t* SearchingPlayer, const
 edict_t* UTIL_FindClosestMarineStructureToLocation(const Vector& Location, const float SearchRadius, bool bAllowElectrified);
 
 bool UTIL_AnyMarinePlayerNearLocation(const Vector& Location, float SearchRadius);
-bool UTIL_AnyMarinePlayerWithLOS(const Vector& Location, float SearchRadius);
+bool UTIL_AnyPlayerOnTeamWithLOS(const Vector& Location, const int Team, float SearchRadius);
+
+edict_t* UTIL_GetClosestPlayerOnTeamWithLOS(const Vector& Location, const int Team, float SearchRadius);
 
 edict_t* UTIL_FindClosestMarineStructureUnbuilt(const Vector& SearchLocation, float SearchRadius);
 edict_t* UTIL_FindClosestDamagedStructure(const Vector& SearchLocation, const int Team, float SearchRadius);

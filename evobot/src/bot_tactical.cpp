@@ -9,6 +9,7 @@
 #include "bot_tactical.h"
 #include "bot_navigation.h"
 #include "bot_config.h"
+#include "DetourTileCacheBuilder.h"
 #include <unordered_map>
 
 #include <meta_api.h>
@@ -1033,7 +1034,7 @@ bool UTIL_IsAlienPlayerInArea(const Vector Location, float SearchRadius)
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (clients[i] && !IsPlayerDead(clients[i]) && IsPlayerOnAlienTeam(clients[i]))
+		if (!FNullEnt(clients[i]) && !IsPlayerDead(clients[i]) && IsPlayerOnAlienTeam(clients[i]))
 		{
 			if (vDist2DSq(clients[i]->v.origin, Location) <= MaxDist)
 			{
@@ -2116,13 +2117,40 @@ edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructure
 	return Result;
 }
 
-bool UTIL_AnyMarinePlayerWithLOS(const Vector& Location, float SearchRadius)
+edict_t* UTIL_GetClosestPlayerOnTeamWithLOS(const Vector& Location, const int Team, float SearchRadius)
+{
+	float distSq = sqrf(SearchRadius);
+	float MinDist = 0.0f;
+	edict_t* Result = nullptr;
+
+	for (int i = 0; i < 32; i++)
+	{
+		if (!FNullEnt(clients[i]) && clients[i]->v.team == Team && IsPlayerActiveInGame(clients[i]))
+		{
+			float ThisDist = vDist2DSq(clients[i]->v.origin, Location);
+
+			if (ThisDist <= distSq && UTIL_PointIsDirectlyReachable(clients[i]->v.origin, Location))
+			{
+				if (FNullEnt(Result) || ThisDist < MinDist)
+				{
+					Result = clients[i];
+					MinDist = ThisDist;
+				}
+				
+			}
+		}
+	}
+
+	return Result;
+}
+
+bool UTIL_AnyPlayerOnTeamWithLOS(const Vector& Location, const int Team, float SearchRadius)
 {
 	float distSq = sqrf(SearchRadius);
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (clients[i] && IsPlayerOnMarineTeam(clients[i]) && !IsPlayerCommander(clients[i]) && !IsPlayerDead(clients[i]) && !IsPlayerBeingDigested(clients[i]))
+		if (!FNullEnt(clients[i]) && clients[i]->v.team == Team && IsPlayerActiveInGame(clients[i]))
 		{
 			if (vDist2DSq(clients[i]->v.origin, Location) <= distSq && UTIL_PointIsDirectlyReachable(clients[i]->v.origin, Location))
 			{
@@ -2509,6 +2537,44 @@ bool IsAlienTraitCategoryAvailable(HiveTechStatus TraitCategory)
 	return false;
 }
 
+unsigned char UTIL_GetAreaForObstruction(NSStructureType StructureType)
+{
+	if (StructureType == STRUCTURE_NONE) { return DT_TILECACHE_NULL_AREA; }
+
+	switch (StructureType)
+	{
+	case STRUCTURE_MARINE_RESTOWER:
+	case STRUCTURE_MARINE_COMMCHAIR:
+	case STRUCTURE_MARINE_ARMOURY:
+	case STRUCTURE_MARINE_ADVARMOURY:
+	case STRUCTURE_MARINE_OBSERVATORY:
+		return DT_TILECACHE_MSTRUCTURE_AREA;
+	case STRUCTURE_ALIEN_RESTOWER:
+	case STRUCTURE_ALIEN_HIVE:
+		return DT_TILECACHE_ASTRUCTURE_AREA;
+	default:
+		return DT_TILECACHE_BLOCKED_AREA;
+	}
+
+	return DT_TILECACHE_BLOCKED_AREA;
+}
+
+float UTIL_GetStructureRadiusForObstruction(NSStructureType StructureType)
+{
+	if (StructureType == STRUCTURE_NONE) { return 0.0f; }
+
+	switch (StructureType)
+	{
+	case STRUCTURE_MARINE_TURRETFACTORY:
+		return 60.0f;
+	default:
+		return 40.0f;
+
+	}
+
+	return 40.0f;
+}
+
 bool UTIL_ShouldStructureCollide(NSStructureType StructureType)
 {
 	if (StructureType == STRUCTURE_NONE) { return false; }
@@ -2558,8 +2624,9 @@ void UTIL_UpdateBuildableStructure(edict_t* Structure)
 		{
 			if (bShouldCollide)
 			{
-				float radius = 32.0f;
-				MarineBuildableStructureMap[Structure].ObstacleRef = UTIL_AddTemporaryObstacle(UTIL_GetCentreOfEntity(MarineBuildableStructureMap[Structure].edict), radius, 100.0f, DT_AREA_NULL);
+				unsigned int area = UTIL_GetAreaForObstruction(StructureType);
+				float Radius = UTIL_GetStructureRadiusForObstruction(StructureType);
+				MarineBuildableStructureMap[Structure].ObstacleRef = UTIL_AddTemporaryObstacle(UTIL_GetCentreOfEntity(MarineBuildableStructureMap[Structure].edict), Radius, 100.0f, area);
 			}
 			else
 			{
@@ -2614,8 +2681,9 @@ void UTIL_UpdateBuildableStructure(edict_t* Structure)
 
 			if (bShouldCollide)
 			{
-				float radius = 32.0f;
-				AlienBuildableStructureMap[Structure].ObstacleRef = UTIL_AddTemporaryObstacle(UTIL_GetCentreOfEntity(AlienBuildableStructureMap[Structure].edict), radius, 100.0f, DT_AREA_NULL);
+				unsigned int area = UTIL_GetAreaForObstruction(StructureType);
+				float Radius = UTIL_GetStructureRadiusForObstruction(StructureType);
+				AlienBuildableStructureMap[Structure].ObstacleRef = UTIL_AddTemporaryObstacle(UTIL_GetCentreOfEntity(AlienBuildableStructureMap[Structure].edict), Radius, 100.0f, area);
 			}
 			else
 			{

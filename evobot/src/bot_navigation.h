@@ -57,7 +57,9 @@ enum SamplePolyAreas
 	SAMPLE_POLYAREA_HIGHJUMP = 8,
 	SAMPLE_POLYAREA_FALL = 9,
 	SAMPLE_POLYAREA_HIGHFALL = 10,
-	SAMPLE_POLYAREA_PHASEGATE = 11
+	SAMPLE_POLYAREA_PHASEGATE = 11,
+	SAMPLE_POLYAREA_MSTRUCTURE = 12,
+	SAMPLE_POLYAREA_ASTRUCTURE = 13,
 };
 
 // Possible movement types. Swim and door are not used
@@ -66,7 +68,7 @@ enum SamplePolyFlags
 	SAMPLE_POLYFLAGS_WALK		= 1 << 0,		// Simple walk to traverse
 	SAMPLE_POLYFLAGS_CROUCH		= 1 << 1,		// Required crouching to traverse
 	SAMPLE_POLYFLAGS_SWIM		= 1 << 2,		// Requires swimming to traverse (not used)
-	SAMPLE_POLYFLAGS_BLOCKED	= 1 << 3,		// Blocked by an obstruction, not usable by anyone
+	SAMPLE_POLYFLAGS_BLOCKED	= 1 << 3,		// Blocked by an obstruction, but can be jumped over
 	SAMPLE_POLYFLAGS_WALLCLIMB	= 1 << 4,		// Requires climbing a wall to traverse
 	SAMPLE_POLYFLAGS_LADDER		= 1 << 5,		// Requires climbing a ladder to traverse
 	SAMPLE_POLYFLAGS_DOOR		= 1 << 6,		// Requires opening a door to traverse (not used)
@@ -77,6 +79,8 @@ enum SamplePolyFlags
 	SAMPLE_POLYFLAGS_DISABLED	= 1 << 11,		// Disabled, not usable by anyone
 	SAMPLE_POLYFLAGS_NOONOS		= 1 << 12,		// This movement is not allowed by onos
 	SAMPLE_POLYFLAGS_PHASEGATE	= 1 << 13,		// Requires using a phase gate to traverse
+	SAMPLE_POLYFLAGS_MSTRUCTURE	= 1 << 14,		// Marine Structure in the way, must be destroyed if alien, or impassable if marine
+	SAMPLE_POLYFLAGS_ASTRUCTURE = 1 << 15,		// Structure in the way, must be destroyed if marine, or impassable if alien
 	SAMPLE_POLYFLAGS_ALL		= 0xffff		// All abilities.
 };
 
@@ -211,6 +215,8 @@ bool IsBotOffPath(const bot_t* pBot);
 void GroundMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
 // Called by NewMove, determines the movement direction and inputs required to jump between start and end points
 void JumpMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
+// Called by NewMove, determines movement direction and jump inputs to hop over obstructions (structures)
+void BlockedMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
 // Called by NewMove, determines the movement direction and inputs required to drop down from start to end points
 void FallMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
 // Called by NewMove, determines the movement direction and inputs required to climb a ladder to reach endpoint
@@ -242,6 +248,7 @@ void UTIL_UpdateTileCache();
 	Using DT_AREA_NULL will effectively cut a hole in the nav mesh, meaning it's no longer considered a valid mesh position.
 */
 unsigned int UTIL_AddTemporaryObstacle(const Vector Location, float Radius, float Height, int area);
+unsigned int UTIL_AddTemporaryBoxObstacle(const Vector Location, Vector HalfExtents, float OrientationInRadians, int area);
 
 /*	Removes the temporary obstacle from the mesh. The area will return to its default type (either walk or crouch).
 	Removing a DT_AREA_NULL obstacle will "fill in" the hole again, making it traversable and considered a valid mesh position.

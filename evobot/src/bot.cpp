@@ -2074,7 +2074,7 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		break;
 	case BOT_ROLE_FADE:
 	{
-		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && !IsPlayerFade(pBot->pEdict))
+		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && !IsPlayerFade(pBot->pEdict) && pBot->resources < kFadeEvolutionCost)
 		{
 			AlienCapperSetPrimaryTask(pBot, Task);
 		}
@@ -2095,7 +2095,7 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 	break;
 	case BOT_ROLE_ONOS:
 	{
-		if (UTIL_GetNumActiveHives() < 2 && !IsPlayerOnos(pBot->pEdict))
+		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && !IsPlayerOnos(pBot->pEdict) && pBot->resources < kOnosEvolutionCost)
 		{
 			AlienCapperSetPrimaryTask(pBot, Task);
 		}
@@ -3551,19 +3551,19 @@ void UpdateAndClearTasks(bot_t* pBot)
 
 bot_task* BotGetNextTask(bot_t* pBot)
 {
-	if (UTIL_IsTaskUrgent(pBot, &pBot->WantsAndNeedsTask))
+	if (UTIL_IsTaskUrgent(pBot, &pBot->PrimaryBotTask))
 	{
-		return &pBot->WantsAndNeedsTask;
+		return &pBot->PrimaryBotTask;
 	}
 
 	if (UTIL_IsTaskUrgent(pBot, &pBot->SecondaryBotTask))
 	{
 		return &pBot->SecondaryBotTask;
 	}
-	
-	if (UTIL_IsTaskUrgent(pBot, &pBot->PrimaryBotTask))
+
+	if (UTIL_IsTaskUrgent(pBot, &pBot->WantsAndNeedsTask))
 	{
-		return &pBot->PrimaryBotTask;
+		return &pBot->WantsAndNeedsTask;
 	}
 
 	if (pBot->WantsAndNeedsTask.TaskType != TASK_NONE)
@@ -5316,10 +5316,6 @@ bool UTIL_BotCanReload(bot_t* pBot)
 	return (pBot->current_weapon.iClip < pBot->current_weapon.iClipMax && pBot->current_weapon.iAmmo1 > 0);
 }
 
-
-
-
-
 void AlienCheckWantsAndNeeds(bot_t* pBot)
 {
 	edict_t* pEdict = pBot->pEdict;
@@ -5346,32 +5342,31 @@ void AlienCheckWantsAndNeeds(bot_t* pBot)
 		}
 	}
 
-
 	if (pBot->CurrentRole != BOT_ROLE_BUILDER && (pBot->PrimaryBotTask.TaskType == TASK_CAP_RESNODE || pBot->PrimaryBotTask.TaskType == TASK_BUILD))
 	{
 		return;
 	}
 
-	if (gpGlobals->time - pBot->LastCombatTime > 15.0f)
+	if (gpGlobals->time - pBot->LastCombatTime > 5.0f)
 	{
-		if (pBot->CurrentRole == BOT_ROLE_FADE && pBot->PrimaryBotTask.TaskType != TASK_CAP_RESNODE)
+		if (pBot->CurrentRole == BOT_ROLE_FADE)
 		{
 			if (!IsPlayerFade(pEdict) && pBot->resources >= kFadeEvolutionCost)
 			{
-				pBot->WantsAndNeedsTask.TaskType = TASK_EVOLVE;
-				pBot->WantsAndNeedsTask.Evolution = IMPULSE_ALIEN_EVOLVE_FADE;
-				pBot->WantsAndNeedsTask.bOrderIsUrgent = true;
+				pBot->PrimaryBotTask.TaskType = TASK_EVOLVE;
+				pBot->PrimaryBotTask.Evolution = IMPULSE_ALIEN_EVOLVE_FADE;
+				pBot->PrimaryBotTask.bOrderIsUrgent = true;
 				return;
 			}
 		}
 
-		if (pBot->CurrentRole == BOT_ROLE_ONOS && pBot->PrimaryBotTask.TaskType != TASK_CAP_RESNODE)
+		if (pBot->CurrentRole == BOT_ROLE_ONOS)
 		{
 			if (!IsPlayerOnos(pEdict) && pBot->resources >= kOnosEvolutionCost)
 			{
-				pBot->WantsAndNeedsTask.TaskType = TASK_EVOLVE;
-				pBot->WantsAndNeedsTask.Evolution = IMPULSE_ALIEN_EVOLVE_ONOS;
-				pBot->WantsAndNeedsTask.bOrderIsUrgent = true;
+				pBot->PrimaryBotTask.TaskType = TASK_EVOLVE;
+				pBot->PrimaryBotTask.Evolution = IMPULSE_ALIEN_EVOLVE_ONOS;
+				pBot->PrimaryBotTask.bOrderIsUrgent = true;
 				return;
 			}
 		}
