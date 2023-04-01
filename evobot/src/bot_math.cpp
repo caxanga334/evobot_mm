@@ -647,3 +647,14 @@ Vector UTIL_GetAimLocationToLeadTarget(const Vector ShooterLocation, const Vecto
 
 	return (TargetLocation + TargetVelocity * t);
 }
+
+float UTIL_GetVelocityRequiredToReachTarget(const Vector StartLocation, const Vector TargetLocation, float Gravity)
+{
+	// Calculate the distance between the start and target positions
+	double distance = vDist3D(StartLocation, TargetLocation);
+
+	// Calculate the initial velocity required to reach the target with no air resistance
+	double velocity = sqrt(2.0f * Gravity * distance);
+
+	return velocity;
+}

@@ -1018,12 +1018,12 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_NOONOS);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 1.0f);
-	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 3.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_FALL, 1.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_LADDER, 1.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 10.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 10.0f);
-	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 2.0f);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 3.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 10.0f);
 
@@ -2267,10 +2267,7 @@ void GroundMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 					BotLeap(pBot, EndPoint);
 				}
 			}
-
-			
 		}
-
 	}
 
 	pBot->desiredMovementDir = UTIL_GetVectorNormal2D(pBot->desiredMovementDir);
@@ -2721,7 +2718,14 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 	// Jump if we're on the floor, to give ourselves a boost and remove that momentary pause while "wall-sticking" mode activates if skulk
 	if ((pEdict->v.flags & FL_ONGROUND) && !IsPlayerClimbingWall(pEdict))
 	{
-		BotJump(pBot);
+		Vector CurrentVelocity = UTIL_GetVectorNormal2D(pBot->pEdict->v.velocity);
+
+		float VelocityDot = UTIL_GetDotProduct2D(vForward, CurrentVelocity);
+
+		if (VelocityDot > 0.7f)
+		{
+			BotJump(pBot);
+		}
 	}
 
 	// Stop holding crouch if we're a skulk so we can actually climb
@@ -2785,10 +2789,9 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 		// Only blink if we're below the target climb height
 		if (pEdict->v.origin.z < RequiredClimbHeight)
 		{
-			Vector ClimbDir = UTIL_GetVectorNormal2D(EndPoint - StartPoint);
 			Vector CurrVelocity = UTIL_GetVectorNormal2D(pBot->pEdict->v.velocity);
 
-			float Dot = UTIL_GetDotProduct2D(ClimbDir, CurrVelocity);
+			float Dot = UTIL_GetDotProduct2D(vForward, CurrVelocity);
 
 			// Don't start blinking unless we're already in the air, or we're moving in the correct direction. Stops fade shooting off sideways when approaching a climb point from the side
 			if (!pBot->BotNavInfo.IsOnGround || Dot > 0.8f || vSize2DSq(pBot->pEdict->v.velocity) < sqrf(5.0f))

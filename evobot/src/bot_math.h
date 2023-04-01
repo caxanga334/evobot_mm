@@ -168,4 +168,6 @@ float UTIL_GetDistanceToPolygon2DSq(const Vector TestPoint, const Vector* Segmen
 
 Vector UTIL_GetAimLocationToLeadTarget(const Vector ShooterLocation, const Vector TargetLocation, const Vector TargetVelocity, const float ProjectileVelocity);
 
+float UTIL_GetVelocityRequiredToReachTarget(const Vector StartLocation, const Vector TargetLocation, float Gravity);
+
 #endif

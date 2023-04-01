@@ -726,21 +726,29 @@ void BotLeap(bot_t* pBot, const Vector TargetLocation)
 
 	MoveLookAt(pBot, LookLocation);
 
-	if (pBot->BotNavInfo.IsOnGround)
+	bool bShouldLeap = pBot->BotNavInfo.IsOnGround && (gpGlobals->time - pBot->BotNavInfo.LandedTime >= 0.2f && gpGlobals->time - pBot->BotNavInfo.LeapAttemptedTime >= 0.5f);
+
+	if (IsPlayerFade(pBot->pEdict) && !pBot->BotNavInfo.IsOnGround)
 	{
-		if (gpGlobals->time - pBot->BotNavInfo.LandedTime >= 0.2f && gpGlobals->time - pBot->BotNavInfo.LeapAttemptedTime >= 0.5f)
+		float RequiredVelocity = UTIL_GetVelocityRequiredToReachTarget(pBot->pEdict->v.origin, TargetLocation, GOLDSRC_GRAVITY);
+		float CurrentVelocity = vSize3D(pBot->pEdict->v.velocity);
+
+		bShouldLeap = (CurrentVelocity < RequiredVelocity);
+	}
+
+	if (bShouldLeap)
+	{
+		
+		Vector FaceAngle = UTIL_GetForwardVector2D(pBot->pEdict->v.v_angle);
+		Vector MoveDir = UTIL_GetVectorNormal2D(TargetLocation - pBot->pEdict->v.origin);
+
+		float Dot = UTIL_GetDotProduct2D(FaceAngle, MoveDir);
+
+		if (Dot >= 0.98f)
 		{
-			Vector FaceAngle = UTIL_GetForwardVector2D(pBot->pEdict->v.v_angle);
-			Vector MoveDir = UTIL_GetVectorNormal2D(TargetLocation - pBot->pEdict->v.origin);
-
-			float Dot = UTIL_GetDotProduct2D(FaceAngle, MoveDir);
-
-			if (Dot >= 0.98f)
-			{
-				pBot->pEdict->v.button = IN_ATTACK2;
-				pBot->BotNavInfo.bIsJumping = true;
-				pBot->BotNavInfo.LeapAttemptedTime = gpGlobals->time;
-			}
+			pBot->pEdict->v.button = IN_ATTACK2;
+			pBot->BotNavInfo.bIsJumping = true;
+			pBot->BotNavInfo.LeapAttemptedTime = gpGlobals->time;
 		}
 	}
 	else
@@ -2511,7 +2519,10 @@ void FadeCombatThink(bot_t* pBot)
 
 	enemy_status* TrackedEnemyRef = &pBot->TrackedEnemies[pBot->CurrentEnemy];
 
-	bool bLowOnHealth = ((pEdict->v.health / pEdict->v.max_health) < 0.5f);
+	float MaxHealthAndArmour = pEdict->v.max_health + GetPlayerMaxArmour(pEdict);
+	float CurrentHealthAndArmour = pEdict->v.health + pEdict->v.armorvalue;
+
+	bool bLowOnHealth = ((CurrentHealthAndArmour / MaxHealthAndArmour) <= 0.5f);
 
 	// Run away if low on health
 	if (bLowOnHealth)
@@ -2611,6 +2622,32 @@ void FadeCombatThink(bot_t* pBot)
 
 	NSWeapon DesiredCombatWeapon = FadeGetBestWeaponForCombatTarget(pBot, CurrentEnemy);
 
+	pBot->DesiredCombatWeapon = DesiredCombatWeapon;
+
+	if (UTIL_IsMeleeWeapon(DesiredCombatWeapon))
+	{
+		Vector TargetLocation = UTIL_GetFloorUnderEntity(CurrentEnemy);
+		Vector BehindPlayer = TargetLocation - (UTIL_GetForwardVector2D(CurrentEnemy->v.v_angle) * 50.0f);
+
+		int NavProfileIndex = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
+
+		if (UTIL_PointIsReachable(NavProfileIndex, pBot->CurrentFloorPosition, BehindPlayer, 0.0f))
+		{
+			MoveTo(pBot, BehindPlayer, MOVESTYLE_NORMAL);
+		}
+		else
+		{
+			MoveTo(pBot, TargetLocation, MOVESTYLE_NORMAL);
+		}
+
+		if (UTIL_GetBotCurrentWeapon(pBot) == DesiredCombatWeapon)
+		{
+			BotAttackTarget(pBot, CurrentEnemy);
+		}
+
+		return;
+	}
+
 	float CurrentDistance = vDist2DSq(pBot->pEdict->v.origin, CurrentEnemy->v.origin);
 	float WeaponMaxDistance = sqrf(UTIL_GetMaxIdealWeaponRange(DesiredCombatWeapon));
 
@@ -2625,60 +2662,29 @@ void FadeCombatThink(bot_t* pBot)
 		return;
 	}
 
-	pBot->DesiredCombatWeapon = DesiredCombatWeapon;
+	float MinWeaponDistance = UTIL_GetMinIdealWeaponRange(DesiredCombatWeapon);
 
-	if (UTIL_GetBotCurrentWeapon(pBot) != DesiredCombatWeapon)
+	Vector EngagementLocation = pBot->BotNavInfo.TargetDestination;
+
+	float EngagementLocationDist = vDist2DSq(EngagementLocation, CurrentEnemy->v.origin);
+
+	if (!EngagementLocation || EngagementLocationDist > WeaponMaxDistance || EngagementLocationDist < MinWeaponDistance || !UTIL_QuickTrace(pBot->pEdict, EngagementLocation, CurrentEnemy->v.origin))
 	{
-		return;
-	}
+		int MoveProfile = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
+		EngagementLocation = UTIL_GetRandomPointOnNavmeshInRadius(MoveProfile, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(2.0f));
 
-	if (UTIL_GetBotCurrentWeapon(pBot) == WEAPON_FADE_SWIPE)
-	{
-		Vector TargetLocation = UTIL_GetFloorUnderEntity(CurrentEnemy);
-		Vector BehindPlayer = TargetLocation - (UTIL_GetForwardVector2D(CurrentEnemy->v.v_angle) * 50.0f);
-
-		int NavProfileIndex = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
-
-		if (UTIL_PointIsReachable(NavProfileIndex, pBot->CurrentFloorPosition, BehindPlayer, 0.0f))
-		{
-			MoveTo(pBot, BehindPlayer, MOVESTYLE_NORMAL);
-		}
-		else
-		{
-			if (UTIL_PointIsReachable(NavProfileIndex, pBot->CurrentFloorPosition, TargetLocation, 50.0f))
-			{
-				MoveTo(pBot, TargetLocation, MOVESTYLE_NORMAL);
-			}
-		}
-
-		BotAttackTarget(pBot, CurrentEnemy);
-
-		return;
-	}
-	else
-	{
-
-		float MinWeaponDistance = UTIL_GetMinIdealWeaponRange(DesiredCombatWeapon);
-
-		Vector EngagementLocation = pBot->BotNavInfo.TargetDestination;
-
-		float EngagementLocationDist = vDist2DSq(EngagementLocation, CurrentEnemy->v.origin);
-
-		if (!EngagementLocation || EngagementLocationDist > WeaponMaxDistance || EngagementLocationDist < MinWeaponDistance || !UTIL_QuickTrace(pBot->pEdict, EngagementLocation, CurrentEnemy->v.origin))
-		{
-			int MoveProfile = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
-			EngagementLocation = UTIL_GetRandomPointOnNavmeshInRadius(MoveProfile, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(2.0f));
-
-			if (EngagementLocation != ZERO_VECTOR && EngagementLocationDist < WeaponMaxDistance || EngagementLocationDist > MinWeaponDistance && UTIL_QuickTrace(pBot->pEdict, EngagementLocation, CurrentEnemy->v.origin))
-			{
-				MoveTo(pBot, EngagementLocation, MOVESTYLE_NORMAL);
-			}
-		}
-		else
+		if (EngagementLocation != ZERO_VECTOR && EngagementLocationDist < WeaponMaxDistance || EngagementLocationDist > MinWeaponDistance && UTIL_QuickTrace(pBot->pEdict, EngagementLocation, CurrentEnemy->v.origin))
 		{
 			MoveTo(pBot, EngagementLocation, MOVESTYLE_NORMAL);
 		}
+	}
+	else
+	{
+		MoveTo(pBot, EngagementLocation, MOVESTYLE_NORMAL);
+	}
 
+	if (UTIL_GetBotCurrentWeapon(pBot) == DesiredCombatWeapon)
+	{
 		BotAttackTarget(pBot, CurrentEnemy);
 	}
 
@@ -2793,7 +2799,11 @@ void OnosCombatThink(bot_t* pBot)
 
 	enemy_status* TrackedEnemyRef = &pBot->TrackedEnemies[pBot->CurrentEnemy];
 
-	bool bLowOnHealth = ((pEdict->v.health / pEdict->v.max_health) < 0.33f);
+	float MaxHealthAndArmour = pEdict->v.max_health + GetPlayerMaxArmour(pEdict);
+	float CurrentHealthAndArmour = pEdict->v.health + pEdict->v.armorvalue;
+
+
+	bool bLowOnHealth = ((CurrentHealthAndArmour / MaxHealthAndArmour) <= 0.33f);
 
 	if (bLowOnHealth)
 	{
@@ -2811,13 +2821,11 @@ void OnosCombatThink(bot_t* pBot)
 		{
 			if (UTIL_GetBotCurrentWeapon(pBot) != WEAPON_ONOS_CHARGE)
 			{
-				pBot->DesiredCombatWeapon = WEAPON_ONOS_CHARGE;
+				pBot->DesiredMoveWeapon = WEAPON_ONOS_CHARGE;
 			}
 			else
 			{
 				// Only charge if it will leave us with enough energy to stomp after, otherwise Onos charges in and then can't do anything
-
-				
 
 				float RequiredEnergy = (kStompEnergyCost + GetLeapCost(pBot)) - (GetPlayerEnergyRegenPerSecond(pEdict) * 0.5f); // We allow for around .5s of regen time as well
 
@@ -2841,34 +2849,22 @@ void OnosCombatThink(bot_t* pBot)
 
 		MoveTo(pBot, EnemyLoc, MOVESTYLE_NORMAL);
 
-		LookAt(pBot, EnemyLoc);
-
 		return;
 	}
 
 	LookAt(pBot, CurrentEnemy);
 
 	NSWeapon DesiredCombatWeapon = OnosGetBestWeaponForCombatTarget(pBot, CurrentEnemy);
-
-	float CurrentDistance = vDist2DSq(pBot->pEdict->v.origin, CurrentEnemy->v.origin);
-	float WeaponMaxDistance = sqrf(UTIL_GetMaxIdealWeaponRange(DesiredCombatWeapon));
-
-	if (CurrentDistance > WeaponMaxDistance)
-	{
-		MoveTo(pBot, CurrentEnemy->v.origin, MOVESTYLE_NORMAL);
-
-		return;
-	}
-
+	
 	pBot->DesiredCombatWeapon = DesiredCombatWeapon;
 
-	if (UTIL_GetBotCurrentWeapon(pBot) != DesiredCombatWeapon)
+	if (UTIL_GetBotCurrentWeapon(pBot) == DesiredCombatWeapon)
 	{
-		return;
+		BotAttackTarget(pBot, CurrentEnemy);
 	}
 
 	MoveTo(pBot, CurrentEnemy->v.origin, MOVESTYLE_NORMAL);
-	BotAttackTarget(pBot, CurrentEnemy);
+	
 	return;
 }
 
