@@ -809,7 +809,7 @@ void BotThink(bot_t *pBot)
 				{
 					AlienThink(pBot);
 				}
-			}				
+			}
 		}		
 	}
 }

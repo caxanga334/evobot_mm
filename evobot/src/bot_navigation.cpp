@@ -3727,7 +3727,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 			return false;
 		}
 
-		dtStatus PathFindingStatus = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->pEdict->v.origin, ValidNavmeshPoint, BotNavInfo->CurrentPath, &BotNavInfo->PathSize, max_player_use_reach);
+		dtStatus PathFindingStatus = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CollisionHullBottomLocation, ValidNavmeshPoint, BotNavInfo->CurrentPath, &BotNavInfo->PathSize, max_player_use_reach);
 
 		if (dtStatusSucceed(PathFindingStatus))
 		{
@@ -3899,7 +3899,7 @@ Vector FindClosestPointBackOnPath(bot_t* pBot)
 
 	// Now we find a path backwards from the valid nav mesh point to our location, trying to get as close as we can to it
 
-	dtStatus BackwardFindingStatus = FindPathClosestToPoint(NavProfileIndex, ValidNavmeshPoint, pBot->pEdict->v.origin, BackwardsPath, &BackwardsPathSize, 500.0f);
+	dtStatus BackwardFindingStatus = FindPathClosestToPoint(NavProfileIndex, ValidNavmeshPoint, pBot->CollisionHullBottomLocation, BackwardsPath, &BackwardsPathSize, 500.0f);
 
 	if (dtStatusSucceed(BackwardFindingStatus))
 	{
@@ -3953,7 +3953,7 @@ void DEBUG_TestBackwardsPathFind(edict_t* pEdict, const Vector Destination)
 	memset(BackwardsPath, 0, sizeof(BackwardsPath));
 	int BackwardsPathSize = 0;
 
-	dtStatus BackwardFindingStatus = FindPathClosestToPoint(MARINE_REGULAR_NAV_PROFILE, ValidNavmeshPoint, pEdict->v.origin, BackwardsPath, &BackwardsPathSize, 500.0f);
+	dtStatus BackwardFindingStatus = FindPathClosestToPoint(MARINE_REGULAR_NAV_PROFILE, ValidNavmeshPoint, UTIL_GetBottomOfCollisionHull(pEdict), BackwardsPath, &BackwardsPathSize, 500.0f);
 
 	if (dtStatusSucceed(BackwardFindingStatus))
 	{
@@ -4437,7 +4437,7 @@ bool BotRecalcPath(bot_t* pBot, const Vector Destination)
 		return false;
 	}
 
-	dtStatus FoundPath = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->pEdict->v.origin, ValidNavmeshPoint, pBot->BotNavInfo.CurrentPath, &pBot->BotNavInfo.PathSize, max_player_use_reach);
+	dtStatus FoundPath = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CollisionHullBottomLocation, ValidNavmeshPoint, pBot->BotNavInfo.CurrentPath, &pBot->BotNavInfo.PathSize, max_player_use_reach);
 
 	if (dtStatusSucceed(FoundPath))
 	{
