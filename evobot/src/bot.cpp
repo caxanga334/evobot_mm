@@ -1292,8 +1292,82 @@ void BotKilledPlayer(bot_t* pBot, edict_t* victim) {
 
 }
 
+int UTIL_GorgeGetNextEnemyTarget(bot_t* pBot)
+{
+	int ClosestVisibleEnemy = -1;
+	float MinVisibleDist = 0.0f;
+
+	int ClosestNonVisibleEnemy = -1;
+	float MinNonVisibleDist = 0.0f;
+
+	edict_t* ClosestVisibleEnemyEdict = nullptr;
+	edict_t* ClosestNonVisibleEnemyEdict = nullptr;
+
+	for (int i = 0; i < 32; i++)
+	{
+		enemy_status* TrackingInfo = &pBot->TrackedEnemies[i];
+		if (TrackingInfo->bIsValidTarget)
+		{
+			float thisDist = vDist2DSq(pBot->pEdict->v.origin, TrackingInfo->EnemyEdict->v.origin);
+
+			if (TrackingInfo->bCurrentlyVisible)
+			{
+				if (ClosestVisibleEnemy < 0 || thisDist < MinVisibleDist)
+				{
+					ClosestVisibleEnemy = i;
+					MinVisibleDist = thisDist;
+				}
+			}
+			else
+			{
+				if ((gpGlobals->time - TrackingInfo->LastSeenTime) > 10.0f) { continue; }
+				if (ClosestNonVisibleEnemy < 0 || thisDist < MinNonVisibleDist)
+				{
+					ClosestNonVisibleEnemy = i;
+					MinNonVisibleDist = thisDist;
+				}
+			}
+		}
+	}
+
+	if (ClosestNonVisibleEnemy == -1 || ClosestVisibleEnemy == -1)
+	{
+		return std::max(ClosestNonVisibleEnemy, ClosestVisibleEnemy);
+	}
+	else
+	{
+		ClosestVisibleEnemyEdict = pBot->TrackedEnemies[ClosestVisibleEnemy].EnemyEdict;
+		ClosestNonVisibleEnemyEdict = pBot->TrackedEnemies[ClosestNonVisibleEnemy].EnemyEdict;
+
+		if (pBot->TrackedEnemies[ClosestNonVisibleEnemy].LastSeenTime > 5.0f || IsPlayerGorge(ClosestNonVisibleEnemyEdict))
+		{
+			return ClosestVisibleEnemy;
+		}
+		else
+		{
+			bool bNonVisibleEnemyHasLOS = UTIL_QuickTrace(pBot->pEdict, pBot->CurrentEyePosition, ClosestNonVisibleEnemyEdict->v.origin);
+
+			if (bNonVisibleEnemyHasLOS)
+			{
+				return (MinVisibleDist < MinNonVisibleDist) ? ClosestVisibleEnemy : ClosestNonVisibleEnemy;
+			}
+			else
+			{
+				return ClosestVisibleEnemy;
+			}
+		}
+	}
+
+	return -1;
+}
+
 int UTIL_GetNextEnemyTarget(bot_t* pBot)
 {
+	if (IsPlayerGorge(pBot->pEdict))
+	{
+		return UTIL_GorgeGetNextEnemyTarget(pBot);
+	}
+
 	int ClosestVisibleEnemy = -1;
 	float MinVisibleDist = 0.0f;
 
@@ -1319,6 +1393,7 @@ int UTIL_GetNextEnemyTarget(bot_t* pBot)
 			}
 			else
 			{
+				if (pBot->PrimaryBotTask.TaskType != TASK_NONE && pBot->PrimaryBotTask.bOrderIsUrgent) { continue; }
 				if (ClosestNonVisibleEnemy < 0 || thisDist < MinNonVisibleDist)
 				{
 					ClosestNonVisibleEnemy = i;
@@ -2069,7 +2144,7 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		break;
 	case BOT_ROLE_FADE:
 	{
-		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && !IsPlayerFade(pBot->pEdict) && pBot->resources < kFadeEvolutionCost)
+		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && (!IsPlayerFade(pBot->pEdict) && pBot->resources < kFadeEvolutionCost))
 		{
 			AlienCapperSetPrimaryTask(pBot, Task);
 		}
@@ -2085,12 +2160,11 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 			}
 			
 		}
-		
 	}
 	break;
 	case BOT_ROLE_ONOS:
 	{
-		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && !IsPlayerOnos(pBot->pEdict) && pBot->resources < kOnosEvolutionCost)
+		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && (!IsPlayerOnos(pBot->pEdict) && pBot->resources < kOnosEvolutionCost))
 		{
 			AlienCapperSetPrimaryTask(pBot, Task);
 		}
@@ -2127,13 +2201,9 @@ void BotAlienSetSecondaryTask(bot_t* pBot, bot_task* Task)
 	case BOT_ROLE_FADE:
 	case BOT_ROLE_ONOS:
 	{
-		if (UTIL_GetNumActiveHives() < 2 && (IsPlayerSkulk(pBot->pEdict) || IsPlayerGorge(pBot->pEdict)))
+		if (IsPlayerGorge(pBot->pEdict))
 		{
 			AlienCapperSetSecondaryTask(pBot, &pBot->PrimaryBotTask);
-		}
-		else
-		{
-			AlienHarasserSetSecondaryTask(pBot, &pBot->PrimaryBotTask);
 		}
 		break;
 	}
@@ -2522,7 +2592,7 @@ void FadeCombatThink(bot_t* pBot)
 	float MaxHealthAndArmour = pEdict->v.max_health + GetPlayerMaxArmour(pEdict);
 	float CurrentHealthAndArmour = pEdict->v.health + pEdict->v.armorvalue;
 
-	bool bLowOnHealth = ((CurrentHealthAndArmour / MaxHealthAndArmour) <= 0.5f);
+	bool bLowOnHealth = (UTIL_GetPlayerOverallHealthPercent(pEdict) < 0.5f);
 
 	// Run away if low on health
 	if (bLowOnHealth)
@@ -2799,11 +2869,7 @@ void OnosCombatThink(bot_t* pBot)
 
 	enemy_status* TrackedEnemyRef = &pBot->TrackedEnemies[pBot->CurrentEnemy];
 
-	float MaxHealthAndArmour = pEdict->v.max_health + GetPlayerMaxArmour(pEdict);
-	float CurrentHealthAndArmour = pEdict->v.health + pEdict->v.armorvalue;
-
-
-	bool bLowOnHealth = ((CurrentHealthAndArmour / MaxHealthAndArmour) <= 0.33f);
+	bool bLowOnHealth = (UTIL_GetPlayerOverallHealthPercent(pEdict) < 0.33f);
 
 	if (bLowOnHealth)
 	{
@@ -3469,7 +3535,7 @@ void AlienCapperSetSecondaryTask(bot_t* pBot, bot_task* Task)
 				pBot->SecondaryBotTask.TaskType = TASK_HEAL;
 				pBot->SecondaryBotTask.TaskTarget = HurtNearbyPlayer;
 				pBot->SecondaryBotTask.TaskLocation = HurtNearbyPlayer->v.origin;
-				pBot->SecondaryBotTask.bOrderIsUrgent = (HurtNearbyPlayer->v.health < (HurtNearbyPlayer->v.max_health * 0.5f));
+				pBot->SecondaryBotTask.bOrderIsUrgent = true;
 			}
 			return;
 		}
@@ -3496,6 +3562,13 @@ void AlienBuilderSetSecondaryTask(bot_t* pBot, bot_task* Task)
 	}
 }
 
+float UTIL_GetPlayerOverallHealthPercent(const edict_t* Player)
+{
+	float MaxHealthAndArmour = Player->v.max_health + GetPlayerMaxArmour(Player);
+	float CurrentHealthAndArmour = Player->v.health + Player->v.armorvalue;
+
+	return (CurrentHealthAndArmour / MaxHealthAndArmour);
+}
 
 void UpdateAndClearTasks(bot_t* pBot)
 {
@@ -3873,9 +3946,7 @@ bool UTIL_IsAlienHealTaskStillValid(bot_t* pBot, bot_task* Task)
 
 	if (!IsPlayerGorge(pBot->pEdict)) { return false; }
 
-	if (Task->TaskTarget->v.armorvalue >= GetPlayerMaxArmour(Task->TaskTarget)) { return false; }
-
-	if (Task->TaskTarget->v.health >= Task->TaskTarget->v.max_health) { return false; }
+	if (UTIL_GetPlayerOverallHealthPercent(Task->TaskTarget) > 0.99f) { return false; }
 
 	// If our target is a player, give up if they are too far away. I'm not going to waste time chasing you around the map!
 
@@ -4368,18 +4439,18 @@ void AlienProgressGetHealthTask(bot_t* pBot, bot_task* Task)
 
 void AlienProgressHealTask(bot_t* pBot, bot_task* Task)
 {
-	if (!IsPlayerGorge(pBot->pEdict) || FNullEnt(Task->TaskTarget)) { return; }
+	if (!IsPlayerGorge(pBot->pEdict) || FNullEnt(Task->TaskTarget) || IsPlayerDead(Task->TaskTarget)) { return; }
 
 	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Task->TaskTarget, UTIL_GetMaxIdealWeaponRange(WEAPON_GORGE_HEALINGSPRAY), false))
 	{
-		LookAt(pBot, Task->TaskTarget);
-		if (UTIL_GetBotCurrentWeapon(pBot) != WEAPON_GORGE_HEALINGSPRAY)
+		pBot->DesiredCombatWeapon = WEAPON_GORGE_HEALINGSPRAY;
+		LookAt(pBot, Task->TaskTarget->v.origin);
+		if (UTIL_GetBotCurrentWeapon(pBot) == WEAPON_GORGE_HEALINGSPRAY)
 		{
-			BotSwitchToWeapon(pBot, WEAPON_GORGE_HEALINGSPRAY);
-			return;
+			pBot->pEdict->v.button |= IN_ATTACK;
 		}
 
-		pBot->pEdict->v.button |= IN_ATTACK;
+		return;
 	}
 	else
 	{
@@ -4469,8 +4540,6 @@ void AlienProgressBuildTask(bot_t* pBot, bot_task* Task)
 {
 	if (Task->TaskTarget)
 	{
-		float DistFromBuildLocation = vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin);
-
 
 		if (UTIL_PlayerInUseRange(pBot->pEdict, Task->TaskTarget))
 		{
@@ -5098,7 +5167,7 @@ float UTIL_GetMaxIdealWeaponRange(const NSWeapon Weapon)
 		case WEAPON_LERK_BITE:
 			return kBite2Range;
 		case WEAPON_GORGE_HEALINGSPRAY:
-			return kHealingSprayRange;
+			return 60.0f;
 		default:
 			return 32.0f;
 	}
@@ -5305,20 +5374,33 @@ void AlienCheckWantsAndNeeds(bot_t* pBot)
 
 	if (IsPlayerDead(pEdict)) { return; }
 
-	bool bNeedsHealth = (pEdict->v.health < pEdict->v.max_health);
+	float MaxHealthAndArmour = pEdict->v.max_health + GetPlayerMaxArmour(pEdict);
+	float CurrentHealthAndArmour = pEdict->v.health + pEdict->v.armorvalue;
 
-	if (bNeedsHealth)
+	bool bLowOnHealth = ((CurrentHealthAndArmour / MaxHealthAndArmour) <= 0.5f);
+
+	if (bLowOnHealth)
 	{
 		if (pBot->WantsAndNeedsTask.TaskType != TASK_GET_HEALTH)
 		{
-			edict_t* HealingSource = UTIL_AlienFindNearestHealingSpot(pBot, pEdict->v.origin);
+			edict_t* HealingSource = nullptr;
+			
+			if (pBot->bot_ns_class == CLASS_GORGE)
+			{
+				HealingSource = pEdict;
+			}
+			else
+			{
+				UTIL_AlienFindNearestHealingSpot(pBot, pEdict->v.origin);
+			}
+			
 
 			if (!FNullEnt(HealingSource))
 			{
 				pBot->WantsAndNeedsTask.TaskType = TASK_GET_HEALTH;
 				pBot->WantsAndNeedsTask.TaskTarget = HealingSource;
 				pBot->WantsAndNeedsTask.TaskLocation = UTIL_GetFloorUnderEntity(HealingSource);
-				pBot->WantsAndNeedsTask.bOrderIsUrgent = (pEdict->v.health < (pEdict->v.max_health * 0.5f));
+				pBot->WantsAndNeedsTask.bOrderIsUrgent = true;
 				return;
 			}
 
@@ -5336,6 +5418,10 @@ void AlienCheckWantsAndNeeds(bot_t* pBot)
 		{
 			if (!IsPlayerFade(pEdict) && pBot->resources >= kFadeEvolutionCost)
 			{
+				UTIL_ClearBotTask(pBot, &pBot->PrimaryBotTask);
+				UTIL_ClearBotTask(pBot, &pBot->SecondaryBotTask);
+				UTIL_ClearBotTask(pBot, &pBot->WantsAndNeedsTask);
+
 				pBot->PrimaryBotTask.TaskType = TASK_EVOLVE;
 				pBot->PrimaryBotTask.Evolution = IMPULSE_ALIEN_EVOLVE_FADE;
 				pBot->PrimaryBotTask.bOrderIsUrgent = true;
@@ -5347,6 +5433,10 @@ void AlienCheckWantsAndNeeds(bot_t* pBot)
 		{
 			if (!IsPlayerOnos(pEdict) && pBot->resources >= kOnosEvolutionCost)
 			{
+				UTIL_ClearBotTask(pBot, &pBot->PrimaryBotTask);
+				UTIL_ClearBotTask(pBot, &pBot->SecondaryBotTask);
+				UTIL_ClearBotTask(pBot, &pBot->WantsAndNeedsTask);
+
 				pBot->PrimaryBotTask.TaskType = TASK_EVOLVE;
 				pBot->PrimaryBotTask.Evolution = IMPULSE_ALIEN_EVOLVE_ONOS;
 				pBot->PrimaryBotTask.bOrderIsUrgent = true;

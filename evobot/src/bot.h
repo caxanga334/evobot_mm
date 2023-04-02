@@ -169,6 +169,7 @@ void UTIL_OnGameStart();
 
 // Helper function to cycle through a bot's tracked enemy list (see enemy_status struct) and pick the most appropriate target, or -1 if no target exists
 int UTIL_GetNextEnemyTarget(bot_t* pBot);
+int UTIL_GorgeGetNextEnemyTarget(bot_t* pBot);
 
 // Converts a weapon type to the droppable item it corresponds to (e.g. WEAPON_MARINE_HMG to ITEM_MARINE_HMG)
 NSDeployableItem UTIL_WeaponTypeToDeployableItem(const NSWeapon WeaponType);
@@ -294,6 +295,7 @@ void AlienBuilderSetSecondaryTask(bot_t* pBot, bot_task* Task);
 
 bool UTIL_BotWithBuildTaskExists(NSStructureType StructureType);
 
+float UTIL_GetPlayerOverallHealthPercent(const edict_t* Player);
 
 
 void BotNotifyStructureDestroyed(bot_t* pBot, const NSStructureType Structure, const Vector Location);

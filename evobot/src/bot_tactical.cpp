@@ -891,9 +891,11 @@ edict_t* UTIL_GetClosestPlayerNeedsHealing(const Vector Location, const int Team
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (clients[i] && clients[i] != IgnorePlayer && clients[i]->v.team == Team && (clients[i]->v.health < clients[i]->v.max_health || clients[i]->v.armorvalue < GetPlayerMaxArmour(clients[i])))
+		if (!FNullEnt(clients[i]) && clients[i] != IgnorePlayer && clients[i]->v.team == Team)
 		{
 			if (bMustBeDirectlyReachable && !UTIL_PointIsDirectlyReachable(Location, UTIL_GetFloorUnderEntity(clients[i]))) { continue; }
+
+			if (UTIL_GetPlayerOverallHealthPercent(clients[i]) > 0.95f) { continue; }
 
 			float ThisDist = vDist2DSq(Location, clients[i]->v.origin);
 
