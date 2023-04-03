@@ -15,6 +15,7 @@
 #include <string>
 #include <fstream>
 
+#include <algorithm>
 #include <unordered_map>
 
 constexpr auto MAX_BOT_NAMES = 100;

@@ -16,6 +16,7 @@
 #include <meta_api.h>
 
 #include <unordered_map>
+#include <algorithm>
 
 #include "bot.h"
 #include "bot_structs.h"
