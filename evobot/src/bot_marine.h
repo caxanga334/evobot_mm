@@ -22,6 +22,7 @@ void MarineHuntEnemy(bot_t* pBot, enemy_status* TrackedEnemy);
 NSWeapon BotMarineChooseBestWeapon(bot_t* pBot, edict_t* target);
 // Sub function for BotMarineChooseBestWeapon if target is a structure to pick the best weapon for attacking it
 NSWeapon BotMarineChooseBestWeaponForStructure(bot_t* pBot, edict_t* target);
+NSWeapon BotAlienChooseBestWeaponForStructure(bot_t* pBot, edict_t* target);
 
 void MarineGuardLocation(bot_t* pBot, const Vector Location, const float GuardTime);
 

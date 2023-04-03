@@ -180,6 +180,8 @@ bot_msg* UTIL_GetAvailableBotMsgSlot(bot_t* pBot);
 // Total number of humans and bots on given team
 int UTIL_GetNumPlayersOnTeam(const int Team);
 
+int UTIL_GetNumPlayersOnTeamOfClass(const int Team, const NSPlayerClass SearchClass);
+
 // Does this alien player have an upgrade of the given type? (Defence, Sensory, Movement)
 bool UTIL_PlayerHasAlienUpgradeOfType(const edict_t* Player, const HiveTechStatus TechType);
 
@@ -304,7 +306,7 @@ bot_task* BotGetNextTask(bot_t* pBot);
 
 void BotOnCompletePrimaryTask(bot_t* pBot, bot_task* Task);
 
-
+BotRole AlienGetBestBotRole(const bot_t* pBot);
 
 NSWeapon UTIL_GetBotMarinePrimaryWeapon(const bot_t* pBot);
 NSWeapon UTIL_GetBotMarineSecondaryWeapon(const bot_t* pBot);
@@ -399,6 +401,7 @@ void BotUpdateDesiredViewRotation(bot_t* pBot);
 // Resets all the bot inputs and updates the status ready for a new iteration of BotThink
 void StartNewBotFrame(bot_t* pBot);
 
+void UTIL_ClearAllBotTasks(bot_t* pBot);
 void UTIL_ClearBotTask(bot_t* pBot, bot_task* Task);
 
 // If a marine, bot will play "I need a medpack" voiceline. Will be pinged to the commander as "soldier needs health". Limited by min_request_spam_time.
@@ -603,7 +606,7 @@ bool UTIL_BotCanReload(bot_t* pBot);
 
 NSStructureType UTIL_GetStructureTypeFromEdict(const edict_t* StructureEdict);
 
-int UTIL_GetBotsWithRoleType(BotRole RoleType, bool bMarines);
+int UTIL_GetBotsWithRoleType(BotRole RoleType, const int Team, const edict_t* IgnorePlayer);
 
 void BotSwitchToWeapon(bot_t* pBot, NSWeapon NewWeaponSlot);
 

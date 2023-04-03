@@ -75,6 +75,25 @@ int UTIL_GetNumPlayersOnTeam(const int Team)
 	return Result;
 }
 
+int UTIL_GetNumPlayersOnTeamOfClass(const int Team, const NSPlayerClass SearchClass)
+{
+	int Result = 0;
+
+	for (int i = 0; i < 32; i++)
+	{
+		if (!FNullEnt(clients[i]) && clients[i]->v.team == Team)
+		{
+			const NSPlayerClass ThisPlayerClass = UTIL_GetPlayerClass(clients[i]);
+			if (ThisPlayerClass == SearchClass)
+			{
+				Result++;
+			}
+		}
+	}
+
+	return Result;
+}
+
 void BotCreate(edict_t *pPlayer, int Team)
 {
 
@@ -323,26 +342,20 @@ char* UTIL_BotRoleToChar(const BotRole Role)
 {
 	switch (Role)
 	{
-		case BOT_ROLE_ATTACK_HIVE:
-			return "Attack Hive";
 		case BOT_ROLE_BUILDER:
 			return "Builder";
 		case BOT_ROLE_COMMAND:
 			return "Command";
-		case BOT_ROLE_FADE:
-			return "Fade";
+		case BOT_ROLE_DESTROYER:
+			return "Destroyer";
 		case BOT_ROLE_FIND_RESOURCES:
 			return "Find Resources";
 		case BOT_ROLE_GUARD_BASE:
 			return "Guard Base";
 		case BOT_ROLE_HARASS:
 			return "Harass";
-		case BOT_ROLE_LERK:
-			return "Lerk";
 		case BOT_ROLE_NONE:
 			return "None";
-		case BOT_ROLE_ONOS:
-			return "Onos";
 		case BOT_ROLE_RES_CAPPER:
 			return "Resource Capper";
 		default:
@@ -2142,46 +2155,9 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 	case BOT_ROLE_HARASS:
 		AlienHarasserSetPrimaryTask(pBot, Task);
 		break;
-	case BOT_ROLE_FADE:
-	{
-		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && (!IsPlayerFade(pBot->pEdict) && pBot->resources < kFadeEvolutionCost))
-		{
-			AlienCapperSetPrimaryTask(pBot, Task);
-		}
-		else
-		{
-			if (IsPlayerFade(pBot->pEdict))
-			{
-				AlienDestroyerSetPrimaryTask(pBot, Task);
-			}
-			else
-			{
-				AlienHarasserSetPrimaryTask(pBot, Task);
-			}
-			
-		}
-	}
-	break;
-	case BOT_ROLE_ONOS:
-	{
-		if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3 && (!IsPlayerOnos(pBot->pEdict) && pBot->resources < kOnosEvolutionCost))
-		{
-			AlienCapperSetPrimaryTask(pBot, Task);
-		}
-		else
-		{
-			if (IsPlayerOnos(pBot->pEdict))
-			{
-				AlienDestroyerSetPrimaryTask(pBot, Task);
-			}
-			else
-			{
-				AlienHarasserSetPrimaryTask(pBot, Task);
-			}
-		}
-		
-	}
-	break;
+	case BOT_ROLE_DESTROYER:
+		AlienDestroyerSetPrimaryTask(pBot, Task);
+		break;
 	case BOT_ROLE_RES_CAPPER:
 		AlienCapperSetPrimaryTask(pBot, Task);
 		break;
@@ -2195,23 +2171,18 @@ void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task)
 
 void BotAlienSetSecondaryTask(bot_t* pBot, bot_task* Task)
 {
+	if (IsPlayerGorge(pBot->pEdict))
+	{
+		AlienBuilderSetSecondaryTask(pBot, &pBot->SecondaryBotTask);
+	}
+
 	switch (pBot->CurrentRole)
 	{
 	case BOT_ROLE_HARASS:
-	case BOT_ROLE_FADE:
-	case BOT_ROLE_ONOS:
-	{
-		if (IsPlayerGorge(pBot->pEdict))
-		{
-			AlienCapperSetSecondaryTask(pBot, &pBot->PrimaryBotTask);
-		}
+		AlienHarasserSetSecondaryTask(pBot, &pBot->SecondaryBotTask);
 		break;
-	}
-	case BOT_ROLE_RES_CAPPER:
-		AlienCapperSetSecondaryTask(pBot, &pBot->PrimaryBotTask);
-		break;
-	case BOT_ROLE_BUILDER:
-		AlienBuilderSetSecondaryTask(pBot, &pBot->PrimaryBotTask);
+	case BOT_ROLE_DESTROYER:
+		UTIL_ClearBotTask(pBot, &pBot->SecondaryBotTask);
 		break;
 	default:
 		break;
@@ -2229,6 +2200,91 @@ enemy_status* UTIL_GetTrackedEnemyRefForTarget(bot_t* pBot, edict_t* Target)
 	}
 
 	return nullptr;
+}
+
+int UTIL_CalcNumAlienBuildersRequired()
+{
+	// If we have all 3 hives up and all have chambers, then we're probably in good shape and only need one token builder to polish off
+	if (UTIL_GetNumActiveHives() > 2 && UTIL_GetFirstHiveWithoutTech() == nullptr)
+	{
+		return 1;
+	}
+
+	// Roughly want 1/5 players to be builders, rounded up
+	return (int)ceilf((float)UTIL_GetNumPlayersOnTeam(ALIEN_TEAM) * 0.2f);
+
+
+}
+
+BotRole AlienGetBestBotRole(const bot_t* pBot)
+{
+	// Don't switch roles if already fade/onos or those resources are potentially wasted
+	if (IsPlayerFade(pBot->pEdict) || IsPlayerOnos(pBot->pEdict))
+	{
+		return BOT_ROLE_DESTROYER;
+	}
+
+	// Likewise for lerks
+	if (IsPlayerLerk(pBot->pEdict))
+	{
+		return BOT_ROLE_HARASS;
+	}
+
+	int NumPlayersOnTeam = UTIL_GetNumPlayersOnTeam(ALIEN_TEAM);
+
+	// We have enough to go destroyer if we want to...
+	if (GetPlayerResources(pBot->pEdict) > kFadeEvolutionCost)
+	{
+		int NumFadesAndOnos = UTIL_GetNumPlayersOnTeamOfClass(ALIEN_TEAM, CLASS_FADE) + UTIL_GetNumPlayersOnTeamOfClass(ALIEN_TEAM, CLASS_ONOS);
+		int NumDestroyers = UTIL_GetBotsWithRoleType(BOT_ROLE_DESTROYER, ALIEN_TEAM, pBot->pEdict);
+		int Existing = NumPlayersOnTeam - NumDestroyers;
+
+		if ((float)NumFadesAndOnos / (float)Existing < 0.33)
+		{
+			return BOT_ROLE_DESTROYER;
+		}	
+	}
+
+	int NumTotalResNodes = UTIL_GetNumResNodes();
+	int NumAlienResTowers = UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER);
+
+	int NumRemainingResNodes = NumTotalResNodes - NumAlienResTowers;
+
+	int NumCappers = UTIL_GetBotsWithRoleType(BOT_ROLE_RES_CAPPER, ALIEN_TEAM, pBot->pEdict);
+
+	if (NumRemainingResNodes > 1 && NumCappers == 0)
+	{
+		return BOT_ROLE_RES_CAPPER;
+	}
+
+	// How much of the map do we currently dominate?
+	float ResTowerRatio = ((float)NumAlienResTowers / (float)NumTotalResNodes);
+
+	// If we own less than a third of the map, prioritise capping resource nodes
+	if (ResTowerRatio < 0.30f)
+	{
+		return BOT_ROLE_RES_CAPPER;
+	}
+
+	if (ResTowerRatio <= 0.5f)
+	{
+		float CapperRatio = ((float)NumCappers / (float)NumPlayersOnTeam);
+
+		if (CapperRatio < 0.2f)
+		{
+			return BOT_ROLE_RES_CAPPER;
+		}
+	}
+
+	int NumRequiredBuilders = UTIL_CalcNumAlienBuildersRequired();
+	int NumBuilders = UTIL_GetBotsWithRoleType(BOT_ROLE_BUILDER, ALIEN_TEAM, pBot->pEdict);
+
+	if (NumBuilders < NumRequiredBuilders)
+	{
+		return BOT_ROLE_BUILDER;
+	}
+
+	return BOT_ROLE_DESTROYER;
 }
 
 void AlienThink(bot_t* pBot)
@@ -2261,53 +2317,6 @@ void AlienThink(bot_t* pBot)
 		}
 	}
 
-	edict_t* DangerTurret = BotGetNearestDangerTurret(pBot, UTIL_MetresToGoldSrcUnits(15.0f));
-
-	if (!FNullEnt(DangerTurret) && UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, DangerTurret->v.origin))
-	{
-		if (pBot->SecondaryBotTask.TaskTarget != DangerTurret)
-		{
-			pBot->SecondaryBotTask.TaskType = TASK_ATTACK;
-			pBot->SecondaryBotTask.TaskTarget = DangerTurret;
-			pBot->SecondaryBotTask.TaskLocation = DangerTurret->v.origin;
-			pBot->SecondaryBotTask.bOrderIsUrgent = true;
-		}
-	}
-
-	// This should ensure a decent spread of roles regardless of bot count. Bots will do the less desireable roles first.
-	if (pBot->CurrentRole == BOT_ROLE_NONE)
-	{
-		int NumCappers = UTIL_GetBotsWithRoleType(BOT_ROLE_RES_CAPPER, false);
-		int NumBuilders = UTIL_GetBotsWithRoleType(BOT_ROLE_BUILDER, false);
-		int NumFades = UTIL_GetBotsWithRoleType(BOT_ROLE_FADE, false);
-		int NumOnos = UTIL_GetBotsWithRoleType(BOT_ROLE_ONOS, false);
-
-		if (NumCappers < 1)
-		{
-			pBot->CurrentRole = BOT_ROLE_RES_CAPPER;
-		}
-		else if (NumBuilders < 1)
-		{
-			pBot->CurrentRole = BOT_ROLE_BUILDER;
-		}
-		else if (NumFades < 1)
-		{
-			pBot->CurrentRole = BOT_ROLE_FADE;
-		}
-		else if (NumBuilders < 2)
-		{
-			pBot->CurrentRole = BOT_ROLE_BUILDER;
-		}
-		else if (NumOnos < 1)
-		{
-			pBot->CurrentRole = BOT_ROLE_ONOS;
-		}
-		else
-		{
-			pBot->CurrentRole = BOT_ROLE_FADE;
-		}		
-	}
-
 	if (!pBot->CurrentTask) { pBot->CurrentTask = &pBot->PrimaryBotTask; }
 
 	UpdateAndClearTasks(pBot);
@@ -2316,10 +2325,18 @@ void AlienThink(bot_t* pBot)
 
 	if (pBot->PrimaryBotTask.TaskType == TASK_NONE)
 	{
+		BotRole RequiredRole = AlienGetBestBotRole(pBot);
+		if (pBot->CurrentRole != RequiredRole)
+		{
+			UTIL_ClearAllBotTasks(pBot);
+
+			pBot->CurrentRole = RequiredRole;
+		}
+
 		BotAlienSetPrimaryTask(pBot, &pBot->PrimaryBotTask);
 	}
 
-	if (!pBot->PrimaryBotTask.bOrderIsUrgent && (pBot->SecondaryBotTask.TaskType == TASK_NONE || !pBot->SecondaryBotTask.bOrderIsUrgent))
+	if (!IsPlayerGorge(pBot->pEdict) && pBot->CurrentRole != BOT_ROLE_BUILDER && !pBot->PrimaryBotTask.bOrderIsUrgent && (pBot->SecondaryBotTask.TaskType == TASK_NONE || !pBot->SecondaryBotTask.bOrderIsUrgent))
 	{
 		BotAlienCheckPriorityTargets(pBot, &pBot->PendingTask);
 
@@ -2957,6 +2974,39 @@ float GetPlayerEnergyRegenPerSecond(edict_t* Player)
 
 void AlienDestroyerSetPrimaryTask(bot_t* pBot, bot_task* Task)
 {
+	if (IsPlayerGorge(pBot->pEdict))
+	{
+		Task->TaskType = TASK_EVOLVE;
+		Task->Evolution = IMPULSE_ALIEN_EVOLVE_SKULK;
+
+		return;
+	}
+
+	if (!IsPlayerFade(pBot->pEdict) && !IsPlayerOnos(pBot->pEdict))
+	{
+		if (pBot->resources >= kFadeEvolutionCost)
+		{
+			if (pBot->resources >= kOnosEvolutionCost)
+			{
+				Task->TaskType = TASK_EVOLVE;
+				Task->Evolution = IMPULSE_ALIEN_EVOLVE_ONOS;
+
+				return;
+			}
+
+			int NumFades = UTIL_GetNumPlayersOnTeamOfClass(ALIEN_TEAM, CLASS_FADE);
+
+			if (NumFades < 2)
+			{
+				Task->TaskType = TASK_EVOLVE;
+				Task->Evolution = IMPULSE_ALIEN_EVOLVE_FADE;
+
+				return;
+			}
+		}
+	}
+
+
 	bool bAllowElectrified = !IsPlayerSkulk(pBot->pEdict);
 
 	edict_t* DangerStructure = UTIL_GetAnyStructureOfTypeNearActiveHive(STRUCTURE_MARINE_PHASEGATE, bAllowElectrified);
@@ -3168,7 +3218,20 @@ void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task)
 	{
 		if (IsPlayerGorge(pBot->pEdict))
 		{
-			BotEvolveLifeform(pBot, CLASS_SKULK);
+			const resource_node* EmptyResNode = UTIL_AlienFindUnclaimedResNodeFurthestFromLocation(pBot, UTIL_GetCommChairLocation(), true);
+
+			if (EmptyResNode)
+			{
+				Task->TaskType = TASK_CAP_RESNODE;
+				Task->TaskLocation = EmptyResNode->origin;
+				Task->StructureType = STRUCTURE_ALIEN_RESTOWER;
+				Task->bOrderIsUrgent = false;
+				return;
+			}
+			else
+			{
+				BotEvolveLifeform(pBot, CLASS_SKULK);
+			}
 			return;
 		}
 
@@ -3195,7 +3258,6 @@ void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task)
 			}
 		}
 
-		AlienHarasserSetPrimaryTask(pBot, Task);
 		return;
 	}
 
@@ -3219,7 +3281,6 @@ void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		return;
 	}
 
-	AlienHarasserSetPrimaryTask(pBot, Task);
 	return;
 }
 
@@ -3537,8 +3598,9 @@ void AlienCapperSetSecondaryTask(bot_t* pBot, bot_task* Task)
 				pBot->SecondaryBotTask.TaskLocation = HurtNearbyPlayer->v.origin;
 				pBot->SecondaryBotTask.bOrderIsUrgent = true;
 			}
-			return;
 		}
+
+		return;
 	}
 }
 
@@ -3862,6 +3924,14 @@ void UTIL_ClearBotTask(bot_t* pBot, bot_task* Task)
 	Task->LastBuildAttemptTime = 0.0f;
 	Task->BuildAttempts = 0;
 	Task->StructureType = STRUCTURE_NONE;
+}
+
+void UTIL_ClearAllBotTasks(bot_t* pBot)
+{
+	UTIL_ClearBotTask(pBot, &pBot->PrimaryBotTask);
+	UTIL_ClearBotTask(pBot, &pBot->SecondaryBotTask);
+	UTIL_ClearBotTask(pBot, &pBot->WantsAndNeedsTask);
+	UTIL_ClearBotTask(pBot, &pBot->PendingTask);
 }
 
 
@@ -4738,31 +4808,6 @@ bool UTIL_IsAlienCapResNodeTaskStillValid(bot_t* pBot, bot_task* Task)
 
 	if (!IsPlayerSkulk(pBot->pEdict) && !IsPlayerGorge(pBot->pEdict)) { return false; }
 
-	if (!IsPlayerGorge(pBot->pEdict))
-	{
-		if (pBot->resources < (kGorgeEvolutionCost + kResourceTowerCost))
-		{
-			return false;
-		}
-	}
-
-	edict_t* OtherGorge = UTIL_GetNearestPlayerOfClass(Task->TaskLocation, CLASS_GORGE, UTIL_MetresToGoldSrcUnits(5.0f), pBot->pEdict);
-
-	if (OtherGorge)
-	{
-		if (vDist2DSq(OtherGorge->v.origin, Task->TaskLocation) < vDist2DSq(pBot->pEdict->v.origin, Task->TaskLocation))
-		{
-			return false;
-		}
-	}
-
-	edict_t* Egg = UTIL_GetNearestPlayerOfClass(Task->TaskLocation, CLASS_EGG, UTIL_MetresToGoldSrcUnits(5.0f), pBot->pEdict);
-
-	if (Egg && (GetPlayerResources(Egg) >= kResourceTowerCost && vDist2DSq(Egg->v.origin, Task->TaskLocation) < vDist2DSq(pBot->pEdict->v.origin, Task->TaskLocation)))
-	{
-		return false;
-	}
-
 	const resource_node* ResNodeIndex = UTIL_FindNearestResNodeToLocation(Task->TaskLocation);
 
 	if (!ResNodeIndex)
@@ -4798,7 +4843,7 @@ bool UTIL_IsAlienCapResNodeTaskStillValid(bot_t* pBot, bot_task* Task)
 	}
 	else
 	{
-		if ((pBot->resources < kResourceTowerCost && !Task->bIsWaitingForBuildLink) || Task->BuildAttempts > 3)
+		if (Task->BuildAttempts > 3)
 		{
 			return false;
 		}
@@ -4839,14 +4884,24 @@ void AlienProgressCapResNodeTask(bot_t* pBot, bot_task* Task)
 			}
 			else
 			{
-				if (pBot->SecondaryBotTask.TaskType != TASK_ATTACK || pBot->SecondaryBotTask.TaskTarget != ResNodeIndex->TowerEdict)
-				{
-					pBot->SecondaryBotTask.TaskType = TASK_ATTACK;
-					pBot->SecondaryBotTask.TaskTarget = ResNodeIndex->TowerEdict;
-					pBot->SecondaryBotTask.TaskLocation = ResNodeIndex->origin;
-				}
+				NSWeapon AttackWeapon = BotAlienChooseBestWeaponForStructure(pBot, Task->TaskTarget);
 
-				BotProgressAttackTask(pBot, &pBot->SecondaryBotTask);
+				float MaxRange = UTIL_GetMaxIdealWeaponRange(AttackWeapon);
+				bool bHullSweep = UTIL_IsMeleeWeapon(AttackWeapon);
+
+				if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Task->TaskTarget, MaxRange, bHullSweep))
+				{
+					pBot->DesiredCombatWeapon = AttackWeapon;
+
+					if (UTIL_GetBotCurrentWeapon(pBot) == AttackWeapon)
+					{
+						BotAttackTarget(pBot, Task->TaskTarget);
+					}
+				}
+				else
+				{
+					MoveTo(pBot, Task->TaskTarget->v.origin, MOVESTYLE_NORMAL);
+				}
 			}
 			return;
 		}
@@ -5217,34 +5272,7 @@ void BotProgressAttackTask(bot_t* pBot, bot_task* Task)
 	}
 	else
 	{
-		if (BotHasWeapon(pBot, WEAPON_GORGE_BILEBOMB))
-		{
-			AttackWeapon = WEAPON_GORGE_BILEBOMB;
-		}
-		else
-		{
-			if (BotHasWeapon(pBot, WEAPON_SKULK_XENOCIDE))
-			{
-				int NumTargetsInArea = UTIL_GetNumPlayersOfTeamInArea(Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(5.0f), MARINE_TEAM, NULL, CLASS_NONE);
-
-				NumTargetsInArea += UTIL_GetNumPlacedStructuresOfTypeInRadius(STRUCTURE_MARINE_ANYTURRET, Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(5.0f));
-
-				NumTargetsInArea += UTIL_GetNumPlacedStructuresOfTypeInRadius(STRUCTURE_MARINE_PHASEGATE, Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(5.0f));
-
-				if (NumTargetsInArea > 2)
-				{
-					AttackWeapon = WEAPON_SKULK_XENOCIDE;
-				}
-				else
-				{
-					AttackWeapon = UTIL_GetBotAlienPrimaryWeapon(pBot);
-				}
-			}
-			else
-			{
-				AttackWeapon = UTIL_GetBotAlienPrimaryWeapon(pBot);
-			}
-		}
+		AttackWeapon = BotAlienChooseBestWeaponForStructure(pBot, Task->TaskTarget);
 	}
 
 	float MaxRange = UTIL_GetMaxIdealWeaponRange(AttackWeapon);
@@ -5414,36 +5442,6 @@ void AlienCheckWantsAndNeeds(bot_t* pBot)
 
 	if (gpGlobals->time - pBot->LastCombatTime > 5.0f)
 	{
-		if (pBot->CurrentRole == BOT_ROLE_FADE)
-		{
-			if (!IsPlayerFade(pEdict) && pBot->resources >= kFadeEvolutionCost)
-			{
-				UTIL_ClearBotTask(pBot, &pBot->PrimaryBotTask);
-				UTIL_ClearBotTask(pBot, &pBot->SecondaryBotTask);
-				UTIL_ClearBotTask(pBot, &pBot->WantsAndNeedsTask);
-
-				pBot->PrimaryBotTask.TaskType = TASK_EVOLVE;
-				pBot->PrimaryBotTask.Evolution = IMPULSE_ALIEN_EVOLVE_FADE;
-				pBot->PrimaryBotTask.bOrderIsUrgent = true;
-				return;
-			}
-		}
-
-		if (pBot->CurrentRole == BOT_ROLE_ONOS)
-		{
-			if (!IsPlayerOnos(pEdict) && pBot->resources >= kOnosEvolutionCost)
-			{
-				UTIL_ClearBotTask(pBot, &pBot->PrimaryBotTask);
-				UTIL_ClearBotTask(pBot, &pBot->SecondaryBotTask);
-				UTIL_ClearBotTask(pBot, &pBot->WantsAndNeedsTask);
-
-				pBot->PrimaryBotTask.TaskType = TASK_EVOLVE;
-				pBot->PrimaryBotTask.Evolution = IMPULSE_ALIEN_EVOLVE_ONOS;
-				pBot->PrimaryBotTask.bOrderIsUrgent = true;
-				return;
-			}
-		}
-
 		if (UTIL_ActiveHiveWithTechExists(HIVE_TECH_MOVEMENT) && !UTIL_PlayerHasAlienUpgradeOfType(pEdict, HIVE_TECH_MOVEMENT) && UTIL_StructureExistsOfType(STRUCTURE_ALIEN_MOVEMENTCHAMBER))
 		{
 			pEdict->v.impulse = UTIL_GetDesiredAlienUpgrade(pBot, HIVE_TECH_MOVEMENT);
@@ -6974,27 +6972,17 @@ bool UTIL_IsThereACommander()
 	return false;
 }
 
-int UTIL_GetBotsWithRoleType(BotRole RoleType, bool bMarines)
+int UTIL_GetBotsWithRoleType(BotRole RoleType, const int Team, const edict_t* IgnorePlayer)
 {
 	int Result = 0;
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (!bots[i].is_used || FNullEnt(bots[i].pEdict)) { continue; }
+		if (!bots[i].is_used || FNullEnt(bots[i].pEdict) || bots[i].bot_team != Team || bots[i].pEdict == IgnorePlayer) { continue; }
 
-		if (bMarines)
+		if (bots[i].CurrentRole == RoleType)
 		{
-			if (IsPlayerOnMarineTeam(bots[i].pEdict) && bots[i].CurrentRole == RoleType)
-			{
-				Result++;
-			}
-		}
-		else
-		{
-			if (IsPlayerOnAlienTeam(bots[i].pEdict) && bots[i].CurrentRole == RoleType)
-			{
-				Result++;
-			}
+			Result++;
 		}
 
 	}

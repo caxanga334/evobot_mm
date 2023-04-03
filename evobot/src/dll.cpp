@@ -1326,7 +1326,7 @@ void StartFrame(void)
 					}
 				}
 
-				if (UTIL_GetBotsWithRoleType(BOT_ROLE_GUARD_BASE, true) == 0)
+				if (UTIL_GetBotsWithRoleType(BOT_ROLE_GUARD_BASE, true, nullptr) == 0)
 				{
 					AssignGuardBot();
 				}

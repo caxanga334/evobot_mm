@@ -56,7 +56,7 @@ void MarineThink(bot_t* pBot)
 
 	if (pBot->CurrentRole == BOT_ROLE_COMMAND)
 	{
-		if (!UTIL_CommChairExists() || UTIL_IsThereACommander() || UTIL_GetBotsWithRoleType(BOT_ROLE_COMMAND, true) > 1)
+		if (!UTIL_CommChairExists() || UTIL_IsThereACommander() || UTIL_GetBotsWithRoleType(BOT_ROLE_COMMAND, true, nullptr) > 1)
 		{
 			pBot->CurrentRole = BOT_ROLE_GUARD_BASE;
 			return;
@@ -594,6 +594,37 @@ NSWeapon BotMarineChooseBestWeapon(bot_t* pBot, edict_t* target)
 	{
 		return BotMarineChooseBestWeaponForStructure(pBot, target);
 	}
+}
+
+NSWeapon BotAlienChooseBestWeaponForStructure(bot_t* pBot, edict_t* target)
+{
+	NSStructureType StructureType = UTIL_GetStructureTypeFromEdict(target);
+
+	if (StructureType == STRUCTURE_NONE)
+	{
+		return UTIL_GetBotAlienPrimaryWeapon(pBot);
+	}
+
+	if (BotHasWeapon(pBot, WEAPON_GORGE_BILEBOMB))
+	{
+		return WEAPON_GORGE_BILEBOMB;
+	}
+
+	if (BotHasWeapon(pBot, WEAPON_SKULK_XENOCIDE))
+	{
+		int NumTargetsInArea = UTIL_GetNumPlayersOfTeamInArea(target->v.origin, UTIL_MetresToGoldSrcUnits(5.0f), MARINE_TEAM, NULL, CLASS_NONE);
+
+		NumTargetsInArea += UTIL_GetNumPlacedStructuresOfTypeInRadius(STRUCTURE_MARINE_ANYTURRET, target->v.origin, UTIL_MetresToGoldSrcUnits(5.0f));
+
+		NumTargetsInArea += UTIL_GetNumPlacedStructuresOfTypeInRadius(STRUCTURE_MARINE_PHASEGATE, target->v.origin, UTIL_MetresToGoldSrcUnits(5.0f));
+
+		if (NumTargetsInArea > 2)
+		{
+			return WEAPON_SKULK_XENOCIDE;
+		}
+	}
+
+	return UTIL_GetBotAlienPrimaryWeapon(pBot);
 }
 
 NSWeapon BotMarineChooseBestWeaponForStructure(bot_t* pBot, edict_t* target)
