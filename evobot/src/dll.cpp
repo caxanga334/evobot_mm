@@ -92,12 +92,12 @@ META_FUNCTIONS gMetaFunctionTable =
 
 plugin_info_t Plugin_info = {
 	META_INTERFACE_VERSION, // interface version
-	"CS_Bot", // plugin name
-	"1.0.0", // plugin version
-	"29/06/2015", // date of creation
+	"EvoBot", // plugin name
+	"0.4.0", // plugin version
+	"30/03/2023", // date of creation
 	"Neoptolemus", // plugin author
 	"http://hpb-bot.bots-united.com/", // plugin URL
-	"CS_BOT", // plugin logtag
+	"EVOBOT", // plugin logtag
 	PT_STARTUP, // when loadable
 	PT_ANYTIME, // when unloadable
 };
