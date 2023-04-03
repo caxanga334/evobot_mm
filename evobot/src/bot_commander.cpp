@@ -142,14 +142,14 @@ bool CommanderProgressBuildAction(bot_t* CommanderBot, int ActionIndex, int Prio
 		}
 
 		// If we are building at base, it's generally safe, so place a structure if any marines are within 20m. Otherwise, they need to be at most 10m away AND have LOS of the build location
-		bool bBuildingAtBase = (vDist2DSq(UTIL_GetCommChairLocation(), action->BuildLocation) < sqrf(UTIL_MetresToGoldSrcUnits(20.0f)));
+		bool bBuildingAtBase = (vDist2DSq(UTIL_GetCommChairLocation(), action->BuildLocation) < sqrf(UTIL_MetresToGoldSrcUnits(15.0f)));
 		float MaxDistFromBuildLocation = bBuildingAtBase ? UTIL_MetresToGoldSrcUnits(20.0f) : UTIL_MetresToGoldSrcUnits(10.0f);
 		
-		bool IsMarineNearby = (bBuildingAtBase) ? UTIL_AnyMarinePlayerNearLocation(action->BuildLocation, MaxDistFromBuildLocation) : UTIL_AnyMarinePlayerWithLOS(action->BuildLocation, MaxDistFromBuildLocation);
+		bool IsMarineNearby = (bBuildingAtBase) ? UTIL_AnyMarinePlayerNearLocation(action->BuildLocation, MaxDistFromBuildLocation) : UTIL_AnyPlayerOnTeamWithLOS(action->BuildLocation, MARINE_TEAM, MaxDistFromBuildLocation);
 
-		bool IsAlienNearby = UTIL_IsAlienPlayerInArea(action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f));
+		bool IsAlienNearby = UTIL_AnyPlayerOnTeamWithLOS(action->BuildLocation, ALIEN_TEAM, UTIL_MetresToGoldSrcUnits(10.0f));
 
-		// If someone is nearby, then put the building down.
+		// If a marine is ready to build, and there isn't an alien around, then go for it
 		if (IsMarineNearby && !IsAlienNearby)
 		{
 			// Otherwise, move to the location and put it down
@@ -159,6 +159,8 @@ bool CommanderProgressBuildAction(bot_t* CommanderBot, int ActionIndex, int Prio
 		// If not, then order someone to go to that location so we can place it
 		if (UTIL_ActionHasValidPlayerAssigned(CommanderBot, ActionIndex, Priority))
 		{
+			edict_t* AssignedPlayerEdict = clients[action->AssignedPlayer];
+
 			// Add this in to prevent order spam in rare circumstances that the player is already at the location but the bot thinks they're not there yet
 			if ((gpGlobals->time - CommanderBot->LastPlayerOrders[action->AssignedPlayer].LastReminderTime) < 5.0f) { return false; }
 
@@ -167,10 +169,10 @@ bool CommanderProgressBuildAction(bot_t* CommanderBot, int ActionIndex, int Prio
 				return UTIL_IssueOrderForAction(CommanderBot, action->AssignedPlayer, ActionIndex, Priority);
 			}
 
-			// Same as above, remind the player to get their arse over there so you can place the building!
-			bool bEligibleForReminder = (gpGlobals->time - CommanderBot->LastPlayerOrders[action->AssignedPlayer].LastReminderTime) > min_order_reminder_time;
+			bool bIsPlayerAtLocation = (vDist2DSq(AssignedPlayerEdict->v.origin, action->BuildLocation) < sqrf(UTIL_MetresToGoldSrcUnits(5.0f)) && UTIL_PointIsDirectlyReachable(AssignedPlayerEdict->v.origin, action->BuildLocation));
+			bool bHasOrderBeenIssuedRecently = (gpGlobals->time - CommanderBot->LastPlayerOrders[action->AssignedPlayer].LastReminderTime) < min_order_reminder_time;
 
-			if (bEligibleForReminder)
+			if (!bIsPlayerAtLocation && !bHasOrderBeenIssuedRecently)
 			{
 				float newDist = UTIL_GetPathCostBetweenLocations(MARINE_REGULAR_NAV_PROFILE, clients[action->AssignedPlayer]->v.origin, CommanderBot->LastPlayerOrders[action->AssignedPlayer].MoveLocation);
 

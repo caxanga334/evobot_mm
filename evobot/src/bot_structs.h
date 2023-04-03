@@ -27,16 +27,18 @@ enum BotRole
 {
 	BOT_ROLE_NONE,
 
+	// Marine Roles
+
 	BOT_ROLE_COMMAND,		 // Will attempt to take command
 	BOT_ROLE_FIND_RESOURCES, // Will hunt for uncapped resource nodes and cap them. Will attack enemy resource towers
-	BOT_ROLE_RES_CAPPER,	 // Will hunt for uncapped nodes or ones held by the enemy and cap them
 	BOT_ROLE_GUARD_BASE,	 // Will stay behind in the base and guard/build stuff
-	BOT_ROLE_ATTACK_HIVE,	 // Not used
+
+	// Alien roles
+
+	BOT_ROLE_RES_CAPPER,	 // Will hunt for uncapped nodes or ones held by the enemy and cap them
 	BOT_ROLE_BUILDER,		 // Will focus on building chambers and hives. Stays gorge most of the time
-	BOT_ROLE_HARASS,		 // Focuses on taking down enemy resource nodes and structures
-	BOT_ROLE_LERK,			 // Not in use yet, will go lerk
-	BOT_ROLE_FADE,			 // Acts like a harasser, but will go Fade once it has enough resources
-	BOT_ROLE_ONOS			 // Acts like a harasser, but will go Onos once it has enough resources
+	BOT_ROLE_HARASS,		 // Focuses on taking down enemy resource nodes and hunting the enemy
+	BOT_ROLE_DESTROYER		 // Will go fade/onos when it can, focuses on attacking critical infrastructure
 };
 
 // Affects the bot's pathfinding choices
@@ -174,6 +176,8 @@ typedef struct _NAV_STATUS
 	BotMoveStyle MoveStyle = MOVESTYLE_NORMAL; // Current desired move style (e.g. normal, ambush, hide). Will trigger new path calculations if this changes
 	float LastPathCalcTime = 0.0f; // When the bot last calculated a path, to limit how frequently it can recalculate
 	int LastMoveProfile = -1; // The last navigation profile used by the bot. Will trigger new path calculations if this changes (e.g. changed class, changed move style)
+
+	bool bPendingRecalculation = false; // This bot should recalculate its path as soon as it can
 
 } nav_status;
 

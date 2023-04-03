@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-
+extern bot_t bots[32];
 extern edict_t* clients[32];
 
 extern hive_definition Hives[10];
@@ -297,27 +297,16 @@ struct MeshProcess : public dtTileCacheMeshProcess
 				polyAreas[i] = SAMPLE_POLYAREA_BLOCKED;
 				polyFlags[i] = SAMPLE_POLYFLAGS_BLOCKED;
 			}
-
-			/*if (polyAreas[i] == SAMPLE_POLYAREA_GROUND)
+			else if (polyAreas[i] == DT_TILECACHE_ASTRUCTURE_AREA)
 			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_WALK;
+				polyAreas[i] = SAMPLE_POLYAREA_ASTRUCTURE;
+				polyFlags[i] = SAMPLE_POLYFLAGS_ASTRUCTURE;
 			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_WATER)
+			else if (polyAreas[i] == DT_TILECACHE_MSTRUCTURE_AREA)
 			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_SWIM;
+				polyAreas[i] = SAMPLE_POLYAREA_MSTRUCTURE;
+				polyFlags[i] = SAMPLE_POLYFLAGS_MSTRUCTURE;
 			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_DOOR)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_WALK | SAMPLE_POLYFLAGS_DOOR;
-			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_CROUCH)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_CROUCH;
-			}
-			else if (polyAreas[i] == SAMPLE_POLYAREA_PHASEGATE)
-			{
-				polyFlags[i] = SAMPLE_POLYFLAGS_PHASEGATE;
-			}*/
 		}
 
 		params->offMeshConAreas = OffMeshAreas;
@@ -358,39 +347,117 @@ void UTIL_DrawTemporaryObstacles()
 
 			if (!ObstacleRef) { continue; }
 
-			float Radius = ObstacleRef->cylinder.radius;
-			float Height = ObstacleRef->cylinder.height;
+			if (ObstacleRef->type == ObstacleType::DT_OBSTACLE_ORIENTED_BOX)
+			{
+				float MinX = ObstacleRef->orientedBox.center[0] - ObstacleRef->orientedBox.halfExtents[0];
+				float MinZ = ObstacleRef->orientedBox.center[2] - ObstacleRef->orientedBox.halfExtents[2];
 
-			// The location of obstacles in Recast are at the bottom of the shape, not the centre
-			Vector Centre = Vector(ObstacleRef->cylinder.pos[0], -ObstacleRef->cylinder.pos[2], ObstacleRef->cylinder.pos[1] + (Height * 0.5f));
+				float MaxX = ObstacleRef->orientedBox.center[0] + ObstacleRef->orientedBox.halfExtents[0];
+				float MaxZ = ObstacleRef->orientedBox.center[2] + ObstacleRef->orientedBox.halfExtents[2];
 
-			if (vDist2DSq(clients[0]->v.origin, Centre) > sqrf(UTIL_MetresToGoldSrcUnits(10.0f))) { continue; }
+				float minx2 = 2.0f * (float(MinX) - ObstacleRef->orientedBox.center[0]);
+				float minz2 = 2.0f * (float(MinZ) - ObstacleRef->orientedBox.center[2]);
+				float maxx2 = 2.0f * (float(MaxX) - ObstacleRef->orientedBox.center[0]);
+				float maxz2 = 2.0f * (float(MaxZ) - ObstacleRef->orientedBox.center[2]);
 
-			Vector LowerBottomLeftCorner = Centre - Vector(Radius, Radius, Height * 0.5f);
-			Vector LowerTopLeftCorner = Centre - Vector(Radius, -Radius, Height * 0.5f);
-			Vector LowerTopRightCorner = Centre + Vector(Radius, Radius, -(Height * 0.5f));
-			Vector LowerBottomRightCorner = Centre - Vector(-Radius, Radius, Height * 0.5f);
+				Vector Centre = Vector(ObstacleRef->orientedBox.center[0], -ObstacleRef->orientedBox.center[2], ObstacleRef->orientedBox.center[1]);
 
-			Vector UpperBottomLeftCorner = Centre - Vector(Radius, Radius, -(Height * 0.5f));
-			Vector UpperTopLeftCorner = Centre - Vector(Radius, -Radius, -(Height * 0.5f));
-			Vector UpperTopRightCorner = Centre + Vector(Radius, Radius, (Height * 0.5f));
-			Vector UpperBottomRightCorner = Centre - Vector(-Radius, Radius, -(Height * 0.5f));
+				UTIL_DrawLine(clients[0], Centre - Vector(0.0f, 0.0f, ObstacleRef->orientedBox.halfExtents[1]), Centre + Vector(0.0f, 0.0f, ObstacleRef->orientedBox.halfExtents[1]), 20.0f, 255, 0, 0);
 
-			UTIL_DrawLine(clients[0], LowerBottomLeftCorner, LowerTopLeftCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], LowerTopLeftCorner, LowerTopRightCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], LowerTopRightCorner, LowerBottomRightCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], LowerBottomRightCorner, LowerBottomLeftCorner, 20.0f, 255, 255, 255);
+				float xrot = ObstacleRef->orientedBox.rotAux[1] * minx2 + ObstacleRef->orientedBox.rotAux[0] * minz2;
+				float zrot = ObstacleRef->orientedBox.rotAux[1] * minz2 - ObstacleRef->orientedBox.rotAux[0] * minx2;
 
-			UTIL_DrawLine(clients[0], UpperBottomLeftCorner, UpperTopLeftCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], UpperTopLeftCorner, UpperTopRightCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], UpperTopRightCorner, UpperBottomRightCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], UpperBottomRightCorner, UpperBottomLeftCorner, 20.0f, 255, 255, 255);
+				Vector LowerBottomLeftCorner = Vector(xrot, -zrot, ObstacleRef->orientedBox.center[1] - ObstacleRef->orientedBox.halfExtents[1]);
+				
+				xrot = ObstacleRef->orientedBox.rotAux[1] * minx2 + ObstacleRef->orientedBox.rotAux[0] * maxz2;
+				zrot = ObstacleRef->orientedBox.rotAux[1] * maxz2 - ObstacleRef->orientedBox.rotAux[0] * minx2;
 
-			UTIL_DrawLine(clients[0], LowerBottomLeftCorner, UpperBottomLeftCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], LowerTopLeftCorner, UpperTopLeftCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], LowerTopRightCorner, UpperTopRightCorner, 20.0f, 255, 255, 255);
-			UTIL_DrawLine(clients[0], LowerBottomRightCorner, UpperBottomRightCorner, 20.0f, 255, 255, 255);
+				Vector LowerTopLeftCorner = Vector(xrot, -zrot, ObstacleRef->orientedBox.center[1] - ObstacleRef->orientedBox.halfExtents[1]);
+
+				xrot = ObstacleRef->orientedBox.rotAux[1] * maxx2 + ObstacleRef->orientedBox.rotAux[0] * maxz2;
+				zrot = ObstacleRef->orientedBox.rotAux[1] * maxz2 - ObstacleRef->orientedBox.rotAux[0] * maxx2;
+
+				Vector LowerTopRightCorner = Vector(xrot, -zrot, ObstacleRef->orientedBox.center[1] - ObstacleRef->orientedBox.halfExtents[1]);
+
+				xrot = ObstacleRef->orientedBox.rotAux[1] * maxx2 + ObstacleRef->orientedBox.rotAux[0] * minz2;
+				zrot = ObstacleRef->orientedBox.rotAux[1] * minz2 - ObstacleRef->orientedBox.rotAux[0] * maxx2;
+
+				Vector LowerBottomRightCorner = Vector(xrot, -zrot, ObstacleRef->orientedBox.center[1] - ObstacleRef->orientedBox.halfExtents[1]);
+
+				Vector UpperBottomLeftCorner = LowerBottomLeftCorner + Vector(0.0f, 0.0f, ObstacleRef->orientedBox.halfExtents[1] * 2.0f);
+				Vector UpperTopLeftCorner = LowerTopLeftCorner + Vector(0.0f, 0.0f, ObstacleRef->orientedBox.halfExtents[1] * 2.0f);
+				Vector UpperTopRightCorner = LowerTopRightCorner + Vector(0.0f, 0.0f, ObstacleRef->orientedBox.halfExtents[1] * 2.0f);
+				Vector UpperBottomRightCorner = LowerBottomRightCorner + Vector(0.0f, 0.0f, ObstacleRef->orientedBox.halfExtents[1] * 2.0f);
+
+				UTIL_DrawLine(clients[0], LowerBottomLeftCorner, LowerTopLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopLeftCorner, LowerTopRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopRightCorner, LowerBottomRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerBottomRightCorner, LowerBottomLeftCorner, 20.0f, 255, 255, 255);
+
+				UTIL_DrawLine(clients[0], UpperBottomLeftCorner, UpperTopLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], UpperTopLeftCorner, UpperTopRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], UpperTopRightCorner, UpperBottomRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], UpperBottomRightCorner, UpperBottomLeftCorner, 20.0f, 255, 255, 255);
+
+				UTIL_DrawLine(clients[0], LowerBottomLeftCorner, UpperBottomLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopLeftCorner, UpperTopLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopRightCorner, UpperTopRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerBottomRightCorner, UpperBottomRightCorner, 20.0f, 255, 255, 255);
+				continue;
+			}
+
+			if (ObstacleRef->type == ObstacleType::DT_OBSTACLE_CYLINDER)
+			{
+
+				float Radius = ObstacleRef->cylinder.radius;
+				float Height = ObstacleRef->cylinder.height;
+
+				// The location of obstacles in Recast are at the bottom of the shape, not the centre
+				Vector Centre = Vector(ObstacleRef->cylinder.pos[0], -ObstacleRef->cylinder.pos[2], ObstacleRef->cylinder.pos[1] + (Height * 0.5f));
+
+				if (vDist2DSq(clients[0]->v.origin, Centre) > sqrf(UTIL_MetresToGoldSrcUnits(10.0f))) { continue; }
+
+				Vector LowerBottomLeftCorner = Centre - Vector(Radius, Radius, Height * 0.5f);
+				Vector LowerTopLeftCorner = Centre - Vector(Radius, -Radius, Height * 0.5f);
+				Vector LowerTopRightCorner = Centre + Vector(Radius, Radius, -(Height * 0.5f));
+				Vector LowerBottomRightCorner = Centre - Vector(-Radius, Radius, Height * 0.5f);
+
+				Vector UpperBottomLeftCorner = Centre - Vector(Radius, Radius, -(Height * 0.5f));
+				Vector UpperTopLeftCorner = Centre - Vector(Radius, -Radius, -(Height * 0.5f));
+				Vector UpperTopRightCorner = Centre + Vector(Radius, Radius, (Height * 0.5f));
+				Vector UpperBottomRightCorner = Centre - Vector(-Radius, Radius, -(Height * 0.5f));
+
+				UTIL_DrawLine(clients[0], LowerBottomLeftCorner, LowerTopLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopLeftCorner, LowerTopRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopRightCorner, LowerBottomRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerBottomRightCorner, LowerBottomLeftCorner, 20.0f, 255, 255, 255);
+
+				UTIL_DrawLine(clients[0], UpperBottomLeftCorner, UpperTopLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], UpperTopLeftCorner, UpperTopRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], UpperTopRightCorner, UpperBottomRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], UpperBottomRightCorner, UpperBottomLeftCorner, 20.0f, 255, 255, 255);
+
+				UTIL_DrawLine(clients[0], LowerBottomLeftCorner, UpperBottomLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopLeftCorner, UpperTopLeftCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerTopRightCorner, UpperTopRightCorner, 20.0f, 255, 255, 255);
+				UTIL_DrawLine(clients[0], LowerBottomRightCorner, UpperBottomRightCorner, 20.0f, 255, 255, 255);
+				continue;
+			}
 			
+		}
+	}
+}
+
+void RecalcAllBotPaths()
+{
+	for (int i = 0; i < 32; i++)
+	{
+		if (bots[i].is_used)
+		{
+			if (bots[i].BotNavInfo.PathSize > 0)
+			{
+				bots[i].BotNavInfo.bPendingRecalculation = true;
+			}
 		}
 	}
 }
@@ -409,6 +476,33 @@ unsigned int UTIL_AddTemporaryObstacle(const Vector Location, float Radius, floa
 			NavMeshes[i].tileCache->addObstacle(Pos, Radius, Height, area, &ObsRef);
 
 			ObstacleNum = (unsigned int)ObsRef;
+		}
+	}
+
+	if (ObstacleNum > 0)
+	{
+		RecalcAllBotPaths();
+	}
+
+	return ObstacleNum;
+}
+
+unsigned int UTIL_AddTemporaryBoxObstacle(const Vector Location, Vector HalfExtents, float OrientationInRadians, int area)
+{
+	unsigned int ObstacleNum = 0;
+
+	float Pos[3] = { Location.x, Location.z - HalfExtents.z, -Location.y };
+	float bHalfExtents[3] = { HalfExtents.x, HalfExtents.z, HalfExtents.y };
+
+	for (int i = 0; i < MAX_NAV_MESHES; i++)
+	{
+		if (NavMeshes[i].tileCache)
+		{
+			dtObstacleRef ObsRef = 0;
+			NavMeshes[i].tileCache->addBoxObstacle(Pos, bHalfExtents, OrientationInRadians, area, &ObsRef);
+
+			ObstacleNum = (unsigned int)ObsRef;
+			
 		}
 	}
 
@@ -478,6 +572,8 @@ void UTIL_RemoveTemporaryObstacle(unsigned int ObstacleRef)
 			NavMeshes[i].tileCache->removeObstacle((dtObstacleRef)ObstacleRef);
 		}
 	}
+
+	RecalcAllBotPaths();
 }
 
 void GetFullFilePath(char* buffer, const char* mapname)
@@ -648,22 +744,22 @@ bool loadNavigationData(const char* mapname)
 	m_tmproc->NumOffMeshConns = header.NumOffMeshCons;
 
 	fseek(savedFile, header.OffMeshConAreasOffset, SEEK_SET);
-	fread(m_tmproc->OffMeshAreas, header.OffMeshConAreasLength, 1, savedFile);
+	size_t ReadResult = fread(m_tmproc->OffMeshAreas, header.OffMeshConAreasLength, 1, savedFile);
 
 	fseek(savedFile, header.OffMeshConDirsOffset, SEEK_SET);
-	fread(m_tmproc->OffMeshDirs, header.OffMeshConDirsLength, 1, savedFile);
+	ReadResult = fread(m_tmproc->OffMeshDirs, header.OffMeshConDirsLength, 1, savedFile);
 
 	fseek(savedFile, header.OffMeshConFlagsOffset, SEEK_SET);
-	fread(m_tmproc->OffMeshFlags, header.OffMeshConFlagsLength, 1, savedFile);
+	ReadResult = fread(m_tmproc->OffMeshFlags, header.OffMeshConFlagsLength, 1, savedFile);
 
 	fseek(savedFile, header.OffMeshConRadsOffset, SEEK_SET);
-	fread(m_tmproc->OffMeshRads, header.OffMeshConRadsLength, 1, savedFile);
+	ReadResult = fread(m_tmproc->OffMeshRads, header.OffMeshConRadsLength, 1, savedFile);
 
 	fseek(savedFile, header.OffMeshConUserIDsOffset, SEEK_SET);
-	fread(m_tmproc->OffMeshIDs, header.OffMeshConUserIDsLength, 1, savedFile);
+	ReadResult = fread(m_tmproc->OffMeshIDs, header.OffMeshConUserIDsLength, 1, savedFile);
 
 	fseek(savedFile, header.OffMeshConVertsOffset, SEEK_SET);
-	fread(m_tmproc->OffMeshVerts, header.OffMeshConVertsLength, 1, savedFile);
+	ReadResult = fread(m_tmproc->OffMeshVerts, header.OffMeshConVertsLength, 1, savedFile);
 
 	// TODO: Need to pass all off mesh connection verts, areas, flags etc as arrays to m_tmproc. Needs to be exported from recast as such
 
@@ -853,21 +949,23 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(0);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_WALLCLIMB);
-	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_MSTRUCTURE);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 1.0f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_PHASEGATE, 0.1f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
+	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_FALL, 1.0f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_LADDER, 1.0f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 10.0f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 10.0f);
 	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 2.0f);
+	NavProfiles[MARINE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_ASTRUCTURE, 20.0f);
 	
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(0);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_LADDER);
-	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 1.0f);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
@@ -876,11 +974,14 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 1.0f);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 1.0f);
 	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 1.0f);
+	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
+	NavProfiles[SKULK_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 20.0f);
 
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(0);
-	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
+	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 1.0f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_PHASEGATE, 0.1f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
@@ -890,12 +991,14 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 1.0f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 2.0f);
 	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_WALLCLIMB, 1.0f);
+	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
+	NavProfiles[FADE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 20.0f);
 
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(0);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_WALLCLIMB);
-	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 1.0f);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
@@ -904,32 +1007,38 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 10.0f);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 10.0f);
 	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 1.0f);
+	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
+	NavProfiles[GORGE_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 20.0f);
 
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].NavMeshIndex = ONOS_NAV_MESH;
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(0);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_WALLCLIMB);
-	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_NOONOS);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 1.0f);
-	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 3.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_FALL, 1.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_LADDER, 1.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 10.0f);
 	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 10.0f);
-	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 2.0f);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 3.0f);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
+	NavProfiles[ONOS_REGULAR_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 10.0f);
 
 	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].NavMeshIndex = BUILDING_NAV_MESH;
 	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
+	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(SAMPLE_POLYFLAGS_MSTRUCTURE);
 	
 
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setExcludeFlags(0);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_LADDER);
-	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 5.0f);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
@@ -938,12 +1047,14 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 1.0f);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 1.0f);
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 1.0f);
+	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
+	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 20.0f);
 
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setExcludeFlags(0);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_WALLCLIMB);
-	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_PHASEGATE);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_GROUND, 5.0f);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_JUMP, 1.5f);
@@ -952,6 +1063,8 @@ bool loadNavigationData(const char* mapname)
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHFALL, 10.0f);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_HIGHJUMP, 10.0f);
 	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_CROUCH, 1.0f);
+	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_BLOCKED, 2.0f);
+	NavProfiles[GORGE_HIDE_NAV_PROFILE].Filters.setAreaCost(SAMPLE_POLYAREA_MSTRUCTURE, 20.0f);
 
 	NavProfiles[ALL_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
 	NavProfiles[ALL_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
@@ -1874,6 +1987,8 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 			}
 		case SAMPLE_POLYAREA_CROUCH:
 			return (vDist2D(pEdict->v.origin, CurrentMoveDest) < playerRadius && bDestIsDirectlyReachable);
+		case SAMPLE_POLYAREA_BLOCKED:
+			return bAtOrPastDestination;
 		case SAMPLE_POLYAREA_FALL:
 		case SAMPLE_POLYAREA_HIGHFALL:
 		case SAMPLE_POLYAREA_JUMP:
@@ -2025,6 +2140,9 @@ void NewMove(bot_t* pBot)
 		case SAMPLE_POLYAREA_HIGHJUMP:
 			JumpMove(pBot, MoveFrom, MoveTo);
 			break;
+		case SAMPLE_POLYAREA_BLOCKED:
+			BlockedMove(pBot, MoveFrom, MoveTo);
+			break;
 		case SAMPLE_POLYAREA_WALLCLIMB:
 			WallClimbMove(pBot, MoveFrom, MoveTo, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].requiredZ);
 			break;
@@ -2149,10 +2267,7 @@ void GroundMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 					BotLeap(pBot, EndPoint);
 				}
 			}
-
-			
 		}
-
 	}
 
 	pBot->desiredMovementDir = UTIL_GetVectorNormal2D(pBot->desiredMovementDir);
@@ -2209,7 +2324,7 @@ void FallMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 	}
 }
 
-void JumpMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
+void BlockedMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 {
 	Vector vForward = UTIL_GetVectorNormal2D(EndPoint - pBot->pEdict->v.origin);
 
@@ -2220,7 +2335,19 @@ void JumpMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 
 	pBot->desiredMovementDir = vForward;
 
-	if (UTIL_PointIsDirectlyReachable(pBot, EndPoint)) { return; }
+	BotJump(pBot);
+}
+
+void JumpMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
+{
+	Vector vForward = UTIL_GetVectorNormal2D(EndPoint - pBot->pEdict->v.origin);
+
+	if (vEquals(vForward, ZERO_VECTOR))
+	{
+		vForward = UTIL_GetVectorNormal2D(EndPoint - StartPoint);
+	}
+
+	pBot->desiredMovementDir = vForward;
 
 	BotJump(pBot);
 
@@ -2591,7 +2718,14 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 	// Jump if we're on the floor, to give ourselves a boost and remove that momentary pause while "wall-sticking" mode activates if skulk
 	if ((pEdict->v.flags & FL_ONGROUND) && !IsPlayerClimbingWall(pEdict))
 	{
-		BotJump(pBot);
+		Vector CurrentVelocity = UTIL_GetVectorNormal2D(pBot->pEdict->v.velocity);
+
+		float VelocityDot = UTIL_GetDotProduct2D(vForward, CurrentVelocity);
+
+		if (VelocityDot > 0.7f)
+		{
+			BotJump(pBot);
+		}
 	}
 
 	// Stop holding crouch if we're a skulk so we can actually climb
@@ -2655,10 +2789,9 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 		// Only blink if we're below the target climb height
 		if (pEdict->v.origin.z < RequiredClimbHeight)
 		{
-			Vector ClimbDir = UTIL_GetVectorNormal2D(EndPoint - StartPoint);
 			Vector CurrVelocity = UTIL_GetVectorNormal2D(pBot->pEdict->v.velocity);
 
-			float Dot = UTIL_GetDotProduct2D(ClimbDir, CurrVelocity);
+			float Dot = UTIL_GetDotProduct2D(vForward, CurrVelocity);
 
 			// Don't start blinking unless we're already in the air, or we're moving in the correct direction. Stops fade shooting off sideways when approaching a climb point from the side
 			if (!pBot->BotNavInfo.IsOnGround || Dot > 0.8f || vSize2DSq(pBot->pEdict->v.velocity) < sqrf(5.0f))
@@ -3217,7 +3350,7 @@ unsigned char UTIL_GetNavAreaAtLocation(const Vector Location)
 	const dtNavMesh* m_navMesh = UTIL_GetNavMeshForProfile(ALL_NAV_PROFILE);
 	const dtQueryFilter* m_navFilter = UTIL_GetNavMeshFilterForProfile(ALL_NAV_PROFILE);
 
-	if (!m_navQuery) { return (unsigned char)SAMPLE_POLYAREA_BLOCKED; }
+	if (!m_navQuery) { return 0; }
 
 	Vector TraceHit = UTIL_GetTraceHitLocation(Location + Vector(0.0f, 0.0f, 10.0f), Location - Vector(0.0f, 0.0f, 500.0f));
 
@@ -3238,7 +3371,7 @@ unsigned char UTIL_GetNavAreaAtLocation(const Vector Location)
 	}
 	else
 	{
-		return (unsigned char)SAMPLE_POLYAREA_BLOCKED;
+		return 0;
 	}
 }
 
@@ -3372,12 +3505,19 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 	Vector MoveTo = pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].Location;
 	unsigned char area = pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area;
 
+	Vector ClosestPointOnLine = vClosestPointOnLine2D(MoveFrom, MoveTo, pBot->pEdict->v.origin);
+
+	Vector MoveFrom2D = Vector(MoveFrom.x, MoveFrom.y, 0.0f);
+	Vector MoveTo2D = Vector(MoveTo.x, MoveTo.y, 0.0f);
+
+	bool bAtOrPastMovement = (vEquals(ClosestPointOnLine, MoveFrom2D, 1.0f) || vEquals(ClosestPointOnLine, MoveTo2D, 1.0f));
+
 	if (BotIsAtLocation(pBot, MoveFrom) || BotIsAtLocation(pBot, MoveTo))
 	{
 		return true;
 	}
 
-	if ((pBot->pEdict->v.flags & FL_ONGROUND) && (UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, MoveFrom) || UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, MoveTo)))
+	if ((pBot->pEdict->v.flags & FL_ONGROUND) && (bAtOrPastMovement || UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, MoveFrom) || UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, MoveTo)))
 	{
 		return true;
 	}
@@ -3388,15 +3528,6 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 
 	if (area == SAMPLE_POLYAREA_GROUND || area == SAMPLE_POLYAREA_CROUCH)
 	{
-		if (pBot->pEdict->v.flags & FL_ONGROUND)
-		{
-			int MoveProfile = UTIL_GetMoveProfileForBot(pBot, pBot->BotNavInfo.MoveStyle);
-
-			if (UTIL_PointIsOnNavmesh(pBot->pEdict->v.origin, MoveProfile))
-			{
-				return true;
-			}
-		}
 		
 		if (bReverseCourse)
 		{
@@ -3406,11 +3537,11 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 		{
 			GroundMove(pBot, MoveFrom, MoveTo);
 		}
-
 	}
 
 	if (area == SAMPLE_POLYAREA_WALLCLIMB)
 	{
+
 		if (bReverseCourse)
 		{
 			FallMove(pBot, MoveTo, MoveFrom);
@@ -3456,7 +3587,7 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 		return true;
 	}
 
-	if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP)
+	if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP || area == SAMPLE_POLYAREA_BLOCKED)
 	{
 		if (pBot->pEdict->v.flags & FL_ONGROUND)
 		{
@@ -3494,16 +3625,6 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 
 	if (area == SAMPLE_POLYAREA_FALL || area == SAMPLE_POLYAREA_HIGHFALL)
 	{
-		if (pBot->pEdict->v.flags & FL_ONGROUND)
-		{
-			int MoveProfile = UTIL_GetMoveProfileForBot(pBot, pBot->BotNavInfo.MoveStyle);
-
-			if (UTIL_PointIsOnNavmesh(pBot->pEdict->v.origin, MoveProfile))
-			{
-				return true;
-			}
-		}
-
 		FallMove(pBot, MoveFrom, MoveTo);
 	}
 
@@ -3572,7 +3693,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 	bool bDestinationChanged = (Destination != BotNavInfo->TargetDestination);
 
 	// Only recalculate the path if there isn't a path, or something has changed and enough time has elapsed since the last path calculation
-	bool bShouldCalculatePath = (BotNavInfo->PathSize == 0 || (bCanRecalculatePath && (bMoveStyleChanged || bNavProfileChanged || bDestinationChanged)));
+	bool bShouldCalculatePath = (BotNavInfo->PathSize == 0 || (bCanRecalculatePath && (bMoveStyleChanged || bNavProfileChanged || bDestinationChanged || BotNavInfo->bPendingRecalculation)));
 
 	UTIL_UpdateBotMovementStatus(pBot);
 
@@ -3585,6 +3706,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 		}
 
 		pBot->BotNavInfo.LastPathCalcTime = gpGlobals->time;
+		BotNavInfo->bPendingRecalculation = false;
 
 		pBot->BotNavInfo.MoveStyle = MoveStyle;
 		pBot->BotNavInfo.LastMoveProfile = MoveProfile;
@@ -3605,7 +3727,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 			return false;
 		}
 
-		dtStatus PathFindingStatus = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->pEdict->v.origin, ValidNavmeshPoint, BotNavInfo->CurrentPath, &BotNavInfo->PathSize, max_player_use_reach);
+		dtStatus PathFindingStatus = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CollisionHullBottomLocation, ValidNavmeshPoint, BotNavInfo->CurrentPath, &BotNavInfo->PathSize, max_player_use_reach);
 
 		if (dtStatusSucceed(PathFindingStatus))
 		{
@@ -3716,7 +3838,7 @@ void DEBUG_DrawPath(const bot_path_node* Path, const int PathSize, const float D
 		{
 			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 255, 0, 0);
 		}
-		else if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP)
+		else if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP || area == SAMPLE_POLYAREA_BLOCKED)
 		{
 			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 255, 255, 0);
 		}
@@ -3777,7 +3899,7 @@ Vector FindClosestPointBackOnPath(bot_t* pBot)
 
 	// Now we find a path backwards from the valid nav mesh point to our location, trying to get as close as we can to it
 
-	dtStatus BackwardFindingStatus = FindPathClosestToPoint(NavProfileIndex, ValidNavmeshPoint, pBot->pEdict->v.origin, BackwardsPath, &BackwardsPathSize, 500.0f);
+	dtStatus BackwardFindingStatus = FindPathClosestToPoint(NavProfileIndex, ValidNavmeshPoint, pBot->CollisionHullBottomLocation, BackwardsPath, &BackwardsPathSize, 500.0f);
 
 	if (dtStatusSucceed(BackwardFindingStatus))
 	{
@@ -3831,7 +3953,7 @@ void DEBUG_TestBackwardsPathFind(edict_t* pEdict, const Vector Destination)
 	memset(BackwardsPath, 0, sizeof(BackwardsPath));
 	int BackwardsPathSize = 0;
 
-	dtStatus BackwardFindingStatus = FindPathClosestToPoint(MARINE_REGULAR_NAV_PROFILE, ValidNavmeshPoint, pEdict->v.origin, BackwardsPath, &BackwardsPathSize, 500.0f);
+	dtStatus BackwardFindingStatus = FindPathClosestToPoint(MARINE_REGULAR_NAV_PROFILE, ValidNavmeshPoint, UTIL_GetBottomOfCollisionHull(pEdict), BackwardsPath, &BackwardsPathSize, 500.0f);
 
 	if (dtStatusSucceed(BackwardFindingStatus))
 	{
@@ -4315,7 +4437,7 @@ bool BotRecalcPath(bot_t* pBot, const Vector Destination)
 		return false;
 	}
 
-	dtStatus FoundPath = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->pEdict->v.origin, ValidNavmeshPoint, pBot->BotNavInfo.CurrentPath, &pBot->BotNavInfo.PathSize, max_player_use_reach);
+	dtStatus FoundPath = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CollisionHullBottomLocation, ValidNavmeshPoint, pBot->BotNavInfo.CurrentPath, &pBot->BotNavInfo.PathSize, max_player_use_reach);
 
 	if (dtStatusSucceed(FoundPath))
 	{
@@ -4575,6 +4697,7 @@ void DEBUG_DrawBotNextPathPoint(bot_t* pBot)
 			break;
 		case SAMPLE_POLYAREA_JUMP:
 		case SAMPLE_POLYAREA_HIGHJUMP:
+		case SAMPLE_POLYAREA_BLOCKED:
 			UTIL_DrawLine(clients[0], StartLine, EndLine, 255, 255, 0);
 			break;
 		case SAMPLE_POLYAREA_FALL:
@@ -4614,7 +4737,7 @@ void BotDrawPath(bot_t* pBot, float DrawTimeInSeconds, bool bShort)
 			{
 				UTIL_DrawLine(clients[0], FromDraw, pBot->BotNavInfo.CurrentPath[i].Location, DrawTime, 255, 0, 0);
 			}
-			else if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP)
+			else if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP || area == SAMPLE_POLYAREA_BLOCKED)
 			{
 				UTIL_DrawLine(clients[0], FromDraw, pBot->BotNavInfo.CurrentPath[i].Location, DrawTime, 255, 255, 0);
 			}
