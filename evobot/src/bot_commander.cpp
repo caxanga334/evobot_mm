@@ -1206,7 +1206,7 @@ bool UTIL_CommanderBuildActionIsValid(bot_t* CommanderBot, commander_action* Act
 
 	if (!FNullEnt(Action->StructureOrItem))
 	{
-		if (Action->StructureOrItem->v.deadflag == DEAD_DEAD || UTIL_StructureIsFullyBuilt(Action->StructureOrItem) || !UTIL_PointIsOnNavmesh(Action->StructureOrItem->v.origin, MARINE_REGULAR_NAV_PROFILE))
+		if (Action->StructureOrItem->v.deadflag == DEAD_DEAD || UTIL_StructureIsFullyBuilt(Action->StructureOrItem) || !UTIL_PointIsOnNavmesh(UTIL_GetEntityGroundLocation(Action->StructureOrItem), MARINE_REGULAR_NAV_PROFILE))
 		{
 			return false;
 		}

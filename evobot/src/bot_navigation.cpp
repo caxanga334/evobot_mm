@@ -2002,7 +2002,7 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 
 				if (DirectionDot >= -0.5f)
 				{
-					return (bAtOrPastDestination || UTIL_PointIsDirectlyReachable(pBot, CurrentPos, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location) || (vDist2D(CurrentPos, CurrentMoveDest) <= playerRadius && UTIL_QuickTrace(pEdict, pEdict->v.origin, (CurrentMoveDest + Vector(0.0f, 0.0f, 5.0f)))));
+					return (bAtOrPastDestination || UTIL_PointIsDirectlyReachable(pBot, CurrentPos, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location));
 				}
 				else
 				{
@@ -2724,7 +2724,7 @@ void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, 
 
 		if (VelocityDot > 0.7f)
 		{
-			BotJump(pBot);
+			//BotJump(pBot);
 		}
 	}
 
@@ -3512,11 +3512,6 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 
 	bool bAtOrPastMovement = (vEquals(ClosestPointOnLine, MoveFrom2D, 1.0f) || vEquals(ClosestPointOnLine, MoveTo2D, 1.0f));
 
-	if (BotIsAtLocation(pBot, MoveFrom) || BotIsAtLocation(pBot, MoveTo))
-	{
-		return true;
-	}
-
 	if ((pBot->pEdict->v.flags & FL_ONGROUND) && (bAtOrPastMovement || UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, MoveFrom) || UTIL_PointIsDirectlyReachable(pBot->pEdict->v.origin, MoveTo)))
 	{
 		return true;
@@ -3727,7 +3722,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 			return false;
 		}
 
-		dtStatus PathFindingStatus = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CollisionHullBottomLocation, ValidNavmeshPoint, BotNavInfo->CurrentPath, &BotNavInfo->PathSize, max_player_use_reach);
+		dtStatus PathFindingStatus = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CurrentFloorPosition, ValidNavmeshPoint, BotNavInfo->CurrentPath, &BotNavInfo->PathSize, max_player_use_reach);
 
 		if (dtStatusSucceed(PathFindingStatus))
 		{
@@ -3899,7 +3894,7 @@ Vector FindClosestPointBackOnPath(bot_t* pBot)
 
 	// Now we find a path backwards from the valid nav mesh point to our location, trying to get as close as we can to it
 
-	dtStatus BackwardFindingStatus = FindPathClosestToPoint(NavProfileIndex, ValidNavmeshPoint, pBot->CollisionHullBottomLocation, BackwardsPath, &BackwardsPathSize, 500.0f);
+	dtStatus BackwardFindingStatus = FindPathClosestToPoint(NavProfileIndex, ValidNavmeshPoint, pBot->CurrentFloorPosition, BackwardsPath, &BackwardsPathSize, 500.0f);
 
 	if (dtStatusSucceed(BackwardFindingStatus))
 	{
@@ -3953,7 +3948,7 @@ void DEBUG_TestBackwardsPathFind(edict_t* pEdict, const Vector Destination)
 	memset(BackwardsPath, 0, sizeof(BackwardsPath));
 	int BackwardsPathSize = 0;
 
-	dtStatus BackwardFindingStatus = FindPathClosestToPoint(MARINE_REGULAR_NAV_PROFILE, ValidNavmeshPoint, UTIL_GetBottomOfCollisionHull(pEdict), BackwardsPath, &BackwardsPathSize, 500.0f);
+	dtStatus BackwardFindingStatus = FindPathClosestToPoint(MARINE_REGULAR_NAV_PROFILE, ValidNavmeshPoint, UTIL_GetEntityGroundLocation(pEdict), BackwardsPath, &BackwardsPathSize, 500.0f);
 
 	if (dtStatusSucceed(BackwardFindingStatus))
 	{
@@ -4437,7 +4432,7 @@ bool BotRecalcPath(bot_t* pBot, const Vector Destination)
 		return false;
 	}
 
-	dtStatus FoundPath = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CollisionHullBottomLocation, ValidNavmeshPoint, pBot->BotNavInfo.CurrentPath, &pBot->BotNavInfo.PathSize, max_player_use_reach);
+	dtStatus FoundPath = FindPathClosestToPoint(pBot, pBot->BotNavInfo.MoveStyle, pBot->CurrentFloorPosition, ValidNavmeshPoint, pBot->BotNavInfo.CurrentPath, &pBot->BotNavInfo.PathSize, max_player_use_reach);
 
 	if (dtStatusSucceed(FoundPath))
 	{

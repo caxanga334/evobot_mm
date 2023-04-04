@@ -454,6 +454,18 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	if (FStrEq(pcmd, "getgroundloc"))
+	{
+		Vector GroundLoc = UTIL_GetEntityGroundLocation(pEntity);
+
+		if (GroundLoc != ZERO_VECTOR)
+		{
+			UTIL_DrawLine(pEntity, GroundLoc, GroundLoc + Vector(0.0f, 0.0f, 50.0f), 5.0f);
+		}
+
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
 
 	if (FStrEq(pcmd, "traceentity"))
 	{
@@ -642,6 +654,13 @@ void ClientCommand(edict_t *pEntity)
 
 			sprintf(buf, "Want Task: %s\n", UTIL_TaskTypeToChar(pBot->WantsAndNeedsTask.TaskType));
 			UTIL_SayText(buf, listenserver_edict);
+
+			if (UTIL_GetNextEnemyTarget(pBot) > -1)
+			{
+				sprintf(buf, "Current Task: COMBAT\n");
+				UTIL_SayText(buf, listenserver_edict);
+				RETURN_META(MRES_SUPERCEDE);
+			}
 
 			sprintf(buf, "Current Task: %s\n", UTIL_TaskTypeToChar(pBot->CurrentTask->TaskType));
 			UTIL_SayText(buf, listenserver_edict);

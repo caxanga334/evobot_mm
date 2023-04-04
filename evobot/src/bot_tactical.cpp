@@ -1675,6 +1675,28 @@ edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const 
 	edict_t* Result = nullptr;
 	float MinDist = 0.0f;
 
+	if (StructureType == STRUCTURE_ALIEN_HIVE)
+	{
+		for (int i = 0; i < NumTotalHives; i++)
+		{
+			if (!Hives[i].bIsValid || Hives[i].Status == HIVE_STATUS_UNBUILT || !Hives[i].bIsUnderAttack) { continue; }
+
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(Hives[i].FloorLocation, UTIL_MetresToGoldSrcUnits(15.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE);
+
+			if (NumPotentialDefenders >= 3) { continue; }
+
+			float ThisDist = vDist2DSq(Hives[i].FloorLocation, pBot->pEdict->v.origin);
+
+			if (FNullEnt(Result) || ThisDist < MinDist)
+			{
+				Result = Hives[i].edict;
+				MinDist = ThisDist;
+			}
+		}
+
+		return Result;
+	}
+
 	bool bMarineStructure = UTIL_IsMarineStructure(StructureType);
 
 	if (bMarineStructure)
@@ -2611,7 +2633,7 @@ void UTIL_UpdateBuildableStructure(edict_t* Structure)
 
 		if (Structure->v.origin != MarineBuildableStructureMap[Structure].Location)
 		{
-			MarineBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, Structure->v.origin, Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
+			MarineBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetEntityGroundLocation(Structure), Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
 		}
 
 		MarineBuildableStructureMap[Structure].Location = Structure->v.origin;
@@ -2639,7 +2661,7 @@ void UTIL_UpdateBuildableStructure(edict_t* Structure)
 			MarineBuildableStructureMap[Structure].healthPercent = (Structure->v.health / Structure->v.max_health);
 			MarineBuildableStructureMap[Structure].bUnderAttack = false;
 			MarineBuildableStructureMap[Structure].lastDamagedTime = 0.0f;
-			MarineBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, Structure->v.origin, Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
+			MarineBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetEntityGroundLocation(Structure), Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
 		}
 		else
 		{
@@ -2665,7 +2687,7 @@ void UTIL_UpdateBuildableStructure(edict_t* Structure)
 
 		if (Structure->v.origin != AlienBuildableStructureMap[Structure].Location)
 		{
-			AlienBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, Structure->v.origin, Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
+			AlienBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetEntityGroundLocation(Structure), Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
 		}
 
 		AlienBuildableStructureMap[Structure].Location = Structure->v.origin;
@@ -2694,7 +2716,7 @@ void UTIL_UpdateBuildableStructure(edict_t* Structure)
 
 			UTIL_OnStructureCreated(&AlienBuildableStructureMap[Structure]);
 
-			AlienBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, Structure->v.origin, Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
+			AlienBuildableStructureMap[Structure].bOnNavmesh = UTIL_PointIsOnNavmesh(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetEntityGroundLocation(Structure), Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach));
 		}
 		else
 		{

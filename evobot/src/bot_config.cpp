@@ -68,7 +68,7 @@ void ParseConfigFile(bool bOverride)
     CurrentSkillLevel = "default";
 
 	char filename[256];
-
+    
     UTIL_BuildFileName(filename, "addons", "evobot", "evobot.cfg", NULL);
 
     std::ifstream cFile(filename);

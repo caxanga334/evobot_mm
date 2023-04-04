@@ -294,6 +294,7 @@ NSStructureType UTIL_GetChamberTypeForHiveTech(const HiveTechStatus HiveTech);
 void AlienHarasserSetSecondaryTask(bot_t* pBot, bot_task* Task);
 void AlienCapperSetSecondaryTask(bot_t* pBot, bot_task* Task);
 void AlienBuilderSetSecondaryTask(bot_t* pBot, bot_task* Task);
+void AlienDestroyerSetSecondaryTask(bot_t* pBot, bot_task* Task);
 
 bool UTIL_BotWithBuildTaskExists(NSStructureType StructureType);
 
@@ -323,8 +324,8 @@ int BotGetPrimaryWeaponClipAmmo(const bot_t* pBot);
 int BotGetGrenadeCount(const bot_t* pBot);
 int BotHasGrenades(const bot_t* pBot);
 
-
-
+// Finds the most appropriate ground location for the entity. If a player is stacked on top of another player, it will retrieve the actual floor position
+Vector UTIL_GetEntityGroundLocation(const edict_t* pEntity);
 
 
 int BotGetSecondaryWeaponAmmoReserve(bot_t* pBot);
