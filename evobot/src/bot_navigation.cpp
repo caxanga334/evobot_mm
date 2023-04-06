@@ -448,6 +448,71 @@ void UTIL_DrawTemporaryObstacles()
 	}
 }
 
+Vector UTIL_GetNearestPointOnNavWall(bot_t* pBot, const float MaxRadius)
+{
+	int NavProfileIndex = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
+
+	if (NavProfileIndex < 0) { return ZERO_VECTOR; }
+
+	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(NavProfileIndex);
+	const dtQueryFilter* m_navFilter = UTIL_GetNavMeshFilterForProfile(NavProfileIndex);
+
+	Vector Location = pBot->CurrentFloorPosition;
+
+	float Pos[3] = { Location.x, Location.z, -Location.y };
+
+	float HitDist = 0.0f;
+	float HitPos[3] = { 0.0f, 0.0f, 0.0f };
+	float HitNorm[3] = { 0.0f, 0.0f, 0.0f };
+
+	dtStatus Result = m_navQuery->findDistanceToWall(pBot->BotNavInfo.CurrentPoly, Pos, MaxRadius, m_navFilter, &HitDist, HitPos, HitNorm);
+
+	if (dtStatusSucceed(Result) && HitDist > 0.0f)
+	{
+		Vector HitResult = Vector(HitPos[0], -HitPos[2], HitPos[1]);
+		return HitResult;
+	}
+
+	return ZERO_VECTOR;
+}
+
+Vector UTIL_GetNearestPointOnNavWall(const int NavProfileIndex, const Vector Location, const float MaxRadius)
+{
+	if (NavProfileIndex < 0) 
+	{
+		return ZERO_VECTOR; 
+	}
+
+	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(NavProfileIndex);
+	const dtQueryFilter* m_navFilter = UTIL_GetNavMeshFilterForProfile(NavProfileIndex);
+
+	// Invalid nav profile
+	if (!m_navQuery) { return ZERO_VECTOR; }
+
+	dtPolyRef StartPoly = UTIL_GetNearestPolyRefForLocation(NavProfileIndex, Location);
+
+	// Not on the nav mesh
+	if (StartPoly == 0) { return Location; }
+
+	float Pos[3] = { Location.x, Location.z, -Location.y };
+
+	float HitDist = 0.0f;
+	float HitPos[3] = { 0.0f, 0.0f, 0.0f };
+	float HitNorm[3] = { 0.0f, 0.0f, 0.0f };
+
+	dtStatus Result = m_navQuery->findDistanceToWall(StartPoly, Pos, MaxRadius, m_navFilter, &HitDist, HitPos, HitNorm);
+
+	// We hit something
+	if (dtStatusSucceed(Result) && HitDist < MaxRadius)
+	{
+		Vector HitResult = Vector(HitPos[0], -HitPos[2], HitPos[1]);
+		return HitResult;
+	}
+
+	// Didn't hit anything
+	return ZERO_VECTOR;
+}
+
 void RecalcAllBotPaths()
 {
 	for (int i = 0; i < 32; i++)
@@ -1029,9 +1094,10 @@ bool loadNavigationData(const char* mapname)
 
 	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].NavMeshIndex = BUILDING_NAV_MESH;
 	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setIncludeFlags(0xFFFF);
-	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
-	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
-	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(SAMPLE_POLYFLAGS_MSTRUCTURE);
+	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.setExcludeFlags(0);
+	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_BLOCKED);
+	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_ASTRUCTURE);
+	NavProfiles[BUILDING_REGULAR_NAV_PROFILE].Filters.addExcludeFlags(SAMPLE_POLYFLAGS_MSTRUCTURE);
 	
 
 	NavProfiles[SKULK_AMBUSH_NAV_PROFILE].NavMeshIndex = REGULAR_NAV_MESH;
@@ -2326,12 +2392,8 @@ void FallMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 
 void BlockedMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 {
-	Vector vForward = UTIL_GetVectorNormal2D(EndPoint - pBot->pEdict->v.origin);
 
-	if (vEquals(vForward, ZERO_VECTOR))
-	{
-		vForward = UTIL_GetVectorNormal2D(EndPoint - StartPoint);
-	}
+	Vector vForward = UTIL_GetVectorNormal2D(EndPoint - StartPoint);
 
 	pBot->desiredMovementDir = vForward;
 
@@ -3289,6 +3351,46 @@ Vector UTIL_GetFloorUnderEntity(const edict_t* Edict)
 	return Edict->v.origin;
 }
 
+dtPolyRef UTIL_GetNearestPolyRefForLocation(const int NavProfileIndex, const Vector Location)
+{
+	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(NavProfileIndex);
+	const dtNavMesh* m_navMesh = UTIL_GetNavMeshForProfile(NavProfileIndex);
+	const dtQueryFilter* m_navFilter = UTIL_GetNavMeshFilterForProfile(NavProfileIndex);
+
+	if (!m_navQuery) { return 0; }
+
+	float ConvertedFloorCoords[3] = { Location.x, Location.z, -Location.y };
+
+	float pPolySearchExtents[3] = { 50.0f, 50.0f, 50.0f };
+
+	dtPolyRef result;
+	float nearestPoint[3] = { 0.0f, 0.0f, 0.0f };
+
+	m_navQuery->findNearestPoly(ConvertedFloorCoords, pPolySearchExtents, m_navFilter, &result, nearestPoint);
+
+	return result;
+}
+
+dtPolyRef UTIL_GetNearestPolyRefForLocation(const Vector Location)
+{
+	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(ALL_NAV_PROFILE);
+	const dtNavMesh* m_navMesh = UTIL_GetNavMeshForProfile(ALL_NAV_PROFILE);
+	const dtQueryFilter* m_navFilter = UTIL_GetNavMeshFilterForProfile(ALL_NAV_PROFILE);
+
+	if (!m_navQuery) { return 0; }
+
+	float ConvertedFloorCoords[3] = { Location.x, Location.z, -Location.y };
+
+	float pPolySearchExtents[3] = { 50.0f, 50.0f, 50.0f };
+
+	dtPolyRef result;
+	float nearestPoint[3] = { 0.0f, 0.0f, 0.0f };
+
+	m_navQuery->findNearestPoly(ConvertedFloorCoords, pPolySearchExtents, m_navFilter, &result, nearestPoint);
+
+	return result;
+}
+
 dtPolyRef UTIL_GetNearestPolyRefForEntity(const edict_t* Edict)
 {
 	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(ALL_NAV_PROFILE);
@@ -3637,6 +3739,8 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 		return true;
 	}
 
+	UTIL_UpdateBotMovementStatus(pBot);
+
 	nav_status* BotNavInfo = &pBot->BotNavInfo;
 
 	// If we are currently in the process of getting back on the navmesh, don't interrupt
@@ -3689,8 +3793,6 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 
 	// Only recalculate the path if there isn't a path, or something has changed and enough time has elapsed since the last path calculation
 	bool bShouldCalculatePath = (BotNavInfo->PathSize == 0 || (bCanRecalculatePath && (bMoveStyleChanged || bNavProfileChanged || bDestinationChanged || BotNavInfo->bPendingRecalculation)));
-
-	UTIL_UpdateBotMovementStatus(pBot);
 
 	if (bShouldCalculatePath)
 	{
@@ -4030,7 +4132,7 @@ void BotFollowPath(bot_t* pBot)
 			return;
 		}
 
-		if (BotNavInfo->CurrentPath[BotNavInfo->CurrentPathPoint].area != SAMPLE_POLYAREA_LADDER && BotNavInfo->CurrentPath[BotNavInfo->CurrentPathPoint].area != SAMPLE_POLYAREA_WALLCLIMB)
+		if (!IsPlayerClimbingWall(pBot->pEdict) && !IsPlayerOnLadder(pBot->pEdict))
 		{
 			PerformUnstuckMove(pBot, TargetMoveLocation);
 			return;
@@ -4050,9 +4152,12 @@ void PerformUnstuckMove(bot_t* pBot, const Vector MoveDestination)
 
 	Vector HeadLocation = UTIL_GetTopOfCollisionHull(pBot->pEdict, false);
 
+	bool bMustCrouch = false;
+
 	if (!IsPlayerSkulk(pBot->pEdict) && !IsPlayerGorge(pBot->pEdict) && !UTIL_QuickTrace(pBot->pEdict, HeadLocation, (HeadLocation + (FwdDir * 50.0f))))
 	{
 		pBot->pEdict->v.button |= IN_DUCK;
+		bMustCrouch = true;
 	}
 
 	Vector MoveRightVector = UTIL_GetVectorNormal2D(UTIL_GetCrossProduct(FwdDir, UP_VECTOR));
@@ -4062,6 +4167,12 @@ void PerformUnstuckMove(bot_t* pBot, const Vector MoveDestination)
 
 	bool bBlockedLeftSide = !UTIL_QuickTrace(pBot->pEdict, BotRightSide, BotRightSide + (FwdDir * 50.0f));
 	bool bBlockedRightSide = !UTIL_QuickTrace(pBot->pEdict, BotLeftSide, BotLeftSide + (FwdDir * 50.0f));
+
+	if (!bMustCrouch)
+	{
+		BotJump(pBot);
+	}
+	
 
 	if (bBlockedRightSide && !bBlockedLeftSide)
 	{
@@ -4090,8 +4201,6 @@ void PerformUnstuckMove(bot_t* pBot, const Vector MoveDestination)
 		{
 			pBot->desiredMovementDir = FwdDir;
 		}
-
-		BotJump(pBot);
 
 	}
 

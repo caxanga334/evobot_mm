@@ -861,11 +861,21 @@ const hive_definition* UTIL_GetClosestViableUnbuiltHive(const Vector SearchLocat
 	return nullptr;
 }
 
+bool UTIL_HiveIsInProgress()
+{
+	for (int i = 0; i < NumTotalHives; i++)
+	{
+		if (Hives[i].bIsValid && Hives[i].Status == HIVE_STATUS_BUILDING) { return true; }
+	}
+
+	return nullptr;
+}
+
 const hive_definition* UTIL_GetFirstHiveWithoutTech()
 {
 	for (int i = 0; i < NumTotalHives; i++)
 	{
-		if (Hives[i].Status == HIVE_STATUS_BUILT && Hives[i].TechStatus == HIVE_TECH_NONE) { return &Hives[i]; }
+		if (Hives[i].bIsValid && Hives[i].Status == HIVE_STATUS_BUILT && Hives[i].TechStatus == HIVE_TECH_NONE) { return &Hives[i]; }
 	}
 
 	return nullptr;
@@ -875,7 +885,7 @@ const hive_definition* UTIL_GetHiveWithTech(HiveTechStatus Tech)
 {
 	for (int i = 0; i < NumTotalHives; i++)
 	{
-		if (Hives[i].Status == HIVE_STATUS_BUILT && Hives[i].TechStatus == Tech) { return &Hives[i]; }
+		if (Hives[i].bIsValid && Hives[i].Status == HIVE_STATUS_BUILT && Hives[i].TechStatus == Tech) { return &Hives[i]; }
 	}
 
 	return nullptr;
@@ -908,6 +918,24 @@ edict_t* UTIL_GetClosestPlayerNeedsHealing(const Vector Location, const int Team
 	}
 
 	return Result;
+}
+
+const hive_definition* UTIL_GetActiveHiveWithoutChambers(HiveTechStatus ChamberType, int NumDesiredChambers)
+{
+	NSStructureType ChamberStructureType = UTIL_GetChamberTypeForHiveTech(ChamberType);
+
+	if (ChamberStructureType == STRUCTURE_NONE) { return false; }
+
+	for (int i = 0; i < NumTotalHives; i++)
+	{
+		if (Hives[i].Status != HIVE_STATUS_BUILT) { continue; }
+
+		int NumChambersOfType = UTIL_GetNumPlacedStructuresOfTypeInRadius(ChamberStructureType, Hives[i].FloorLocation, UTIL_MetresToGoldSrcUnits(10.0f));
+
+		if (NumChambersOfType < NumDesiredChambers) { return &Hives[i]; }
+	}
+
+	return false;
 }
 
 bool UTIL_ActiveHiveWithTechExists(HiveTechStatus Tech)
@@ -998,7 +1026,7 @@ int UTIL_GetNumPlayersOfTeamInArea(const Vector Location, const float SearchRadi
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (!FNullEnt(clients[i]) && clients[i] != IgnorePlayer && !IsPlayerCommander(clients[i]) && !IsPlayerDead(clients[i]) && !IsPlayerBeingDigested(clients[i]) && clients[i]->v.team == Team && UTIL_GetPlayerClass(clients[i]) != IgnoreClass)
+		if (!FNullEnt(clients[i]) && clients[i] != IgnorePlayer && clients[i]->v.team == Team && UTIL_GetPlayerClass(clients[i]) != IgnoreClass && IsPlayerActiveInGame(clients[i]))
 		{
 			float ThisDist = vDist2DSq(clients[i]->v.origin, Location);
 
@@ -1191,6 +1219,47 @@ int UTIL_GetNumPlacedStructuresOfType(const NSStructureType StructureType)
 		{
 			if (!it.second.bOnNavmesh) { continue; }
 			if (UTIL_StructureTypesMatch(it.second.StructureType, StructureType)) { result++; }
+		}
+	}
+
+	return result;
+}
+
+int UTIL_GetNumBuiltStructuresOfTypeInRadius(const NSStructureType StructureType, const Vector Location, const float MaxRadius)
+{
+	bool bIsMarineStructure = UTIL_IsMarineStructure(StructureType);
+
+	int result = 0;
+	float MaxDist = sqrf(MaxRadius);
+
+	if (bIsMarineStructure)
+	{
+		for (auto& it : MarineBuildableStructureMap)
+		{
+			if (!it.second.bOnNavmesh) { continue; }
+			if (UTIL_StructureTypesMatch(it.second.StructureType, StructureType) && it.second.bFullyConstructed)
+			{
+				if (vDist2DSq(it.second.Location, Location) <= MaxDist)
+				{
+					result++;
+				}
+
+			}
+		}
+	}
+	else
+	{
+		for (auto& it : AlienBuildableStructureMap)
+		{
+			if (!it.second.bOnNavmesh) { continue; }
+			if (UTIL_StructureTypesMatch(it.second.StructureType, StructureType) && it.second.bFullyConstructed)
+			{
+				if (vDist2DSq(it.second.Location, Location) <= MaxDist)
+				{
+					result++;
+				}
+
+			}
 		}
 	}
 
@@ -3061,4 +3130,25 @@ int UTIL_GetNumEquipmentInPlay()
 
 
 	return NumPlacedEquipment + NumUsedEquipment;
+}
+
+bool UTIL_BaseIsInDistress()
+{
+	int NumDefenders = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), MARINE_TEAM, nullptr, CLASS_NONE);
+	int NumMarines = UTIL_GetNumPlayersOnTeam(MARINE_TEAM);
+
+	float MarineRatio = ((float)NumDefenders / (float)(NumMarines - 1));
+
+	if (MarineRatio >= 0.3f) { return false; }
+
+	int NumInfantryPortals = UTIL_GetNumBuiltStructuresOfType(STRUCTURE_MARINE_INFANTRYPORTAL);
+
+	int NumOnos = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_ONOS);
+	int NumFades = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_FADE);
+	int NumSkulks = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_SKULK);
+
+	float MarineForce = (float)NumDefenders * 1.0f;
+	float AlienForce = ((float)NumSkulks * 1.0f) + ((NumFades + NumOnos) * 1.5f);
+
+	return ((NumInfantryPortals == 0 || AlienForce > 2.0f) && AlienForce > (MarineForce * 2.0f));
 }

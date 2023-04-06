@@ -300,6 +300,7 @@ bool UTIL_BotWithBuildTaskExists(NSStructureType StructureType);
 
 float UTIL_GetPlayerOverallHealthPercent(const edict_t* Player);
 
+bool UTIL_IsBotReloading(bot_t* pBot);
 
 void BotNotifyStructureDestroyed(bot_t* pBot, const NSStructureType Structure, const Vector Location);
 
@@ -620,6 +621,7 @@ const char* UTIL_HiveTechToChar(const HiveTechStatus HiveTech);
 void OnBotChangeClass(bot_t* pBot);
 
 bool UTIL_IsEdictPlayer(const edict_t* edict);
+bool UTIL_IsEdictStructure(const edict_t* edict);
 
 HiveTechStatus UTIL_GetTechForChamber(NSStructureType ChamberToConstruct);
 

@@ -15,7 +15,7 @@
 
 void MarineThink(bot_t* pBot);
 
-void MarineCombatThink(bot_t* pBot);
+bool MarineCombatThink(bot_t* pBot);
 void MarineHuntEnemy(bot_t* pBot, enemy_status* TrackedEnemy);
 
 // Helper function to pick the best weapon for any given situation and target type.

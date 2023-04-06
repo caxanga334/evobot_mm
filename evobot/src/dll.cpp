@@ -378,6 +378,26 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	if (FStrEq(pcmd, "testbeacon"))
+	{
+		
+		for (int i = 0; i < gpGlobals->maxClients; i++)
+		{
+			if (bots[i].is_used)  // not respawning
+			{
+				if (bots[i].bot_ns_class == CLASS_MARINE_COMMANDER)
+				{
+					if (UTIL_MarineResearchIsAvailable(RESEARCH_OBSERVATORY_DISTRESSBEACON))
+					{
+						CommanderQueueResearch(&bots[i], RESEARCH_OBSERVATORY_DISTRESSBEACON, 0);
+					}
+				}
+			}
+		}
+		
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
 	if (FStrEq(pcmd, "testattackhive"))
 	{
 		if (!NavmeshLoaded())
@@ -414,27 +434,6 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "testattack"))
-	{
-		edict_t* Structure = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_PHASEGATE);
-
-		if (Structure)
-		{
-			for (int i = 0; i < gpGlobals->maxClients; i++)
-			{
-				if (bots[i].is_used)  // not respawning
-				{
-					if (bots[i].bot_ns_class == CLASS_MARINE_COMMANDER)
-					{
-						CommanderQueueElectricResearch(&bots[i], 0, Structure);
-					}
-				}
-			}			
-		}
-
-
-		RETURN_META(MRES_SUPERCEDE);
-	}
 
 	if (FStrEq(pcmd, "drawobstacles"))
 	{

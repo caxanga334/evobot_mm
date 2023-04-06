@@ -245,6 +245,9 @@ void UTIL_UpdateTileCache();
 
 void RecalcAllBotPaths();
 
+Vector UTIL_GetNearestPointOnNavWall(bot_t* pBot, const float MaxRadius);
+Vector UTIL_GetNearestPointOnNavWall(const int NavProfileIndex, const Vector Location, const float MaxRadius);
+
 /*	Places a temporary obstacle of the given height and radius on the mesh.Will modify that part of the nav mesh to be the given area.
 	An example use case is to place an obstacle of area type SAMPLE_POLYAREA_OBSTRUCTION to mark where buildings are.
 	Using DT_AREA_NULL will effectively cut a hole in the nav mesh, meaning it's no longer considered a valid mesh position.
@@ -381,6 +384,8 @@ Vector UTIL_GetFloorUnderEntity(const edict_t* Edict);
 
 // Returns the nearest nav mesh poly reference for the edict's current world position
 dtPolyRef UTIL_GetNearestPolyRefForEntity(const edict_t* Edict);
+dtPolyRef UTIL_GetNearestPolyRefForLocation(const Vector Location);
+dtPolyRef UTIL_GetNearestPolyRefForLocation(const int NavProfileIndex, const Vector Location);
 
 // Returns the area for the nearest nav mesh poly to the given location. Returns BLOCKED if none found
 unsigned char UTIL_GetNavAreaAtLocation(const Vector Location);

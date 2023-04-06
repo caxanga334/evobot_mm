@@ -115,6 +115,8 @@ void UTIL_LinkPlacedStructureToAction(bot_t* CommanderBot, buildable_structure* 
 // Is there a hive with the alien tech (Defence, Sensory, Movement) assigned to it?
 bool UTIL_ActiveHiveWithTechExists(HiveTechStatus Tech);
 
+const hive_definition* UTIL_GetActiveHiveWithoutChambers(HiveTechStatus ChamberType, int NumDesiredChambers);
+
 const hive_definition* UTIL_GetNearestHiveOfStatus(const Vector SearchLocation, const HiveStatusType Status);
 
 
@@ -160,6 +162,7 @@ edict_t* UTIL_GetFirstIdleStructureOfType(const NSStructureType StructureType);
 
 int UTIL_GetNumPlacedStructuresOfType(const NSStructureType StructureType);
 int UTIL_GetNumPlacedStructuresOfTypeInRadius(const NSStructureType StructureType, const Vector Location, const float MaxRadius);
+int UTIL_GetNumBuiltStructuresOfTypeInRadius(const NSStructureType StructureType, const Vector Location, const float MaxRadius);
 int UTIL_GetNumBuiltStructuresOfType(const NSStructureType StructureType);
 
 int UTIL_GetNearestAvailableResourcePointIndex(const Vector& SearchPoint);
@@ -236,6 +239,9 @@ const resource_node* UTIL_GetNearestUnprotectedResNode(const Vector Location);
 // Returns the first completed hive index which does not yet have a tech assigned to it. -1 if not found.
 const hive_definition* UTIL_GetFirstHiveWithoutTech();
 
+// Returns true if there is a hive in progress
+bool UTIL_HiveIsInProgress();
+
 // Returns the index of a completed hive with the associated tech. -1 if not found.
 const hive_definition* UTIL_GetHiveWithTech(HiveTechStatus Tech);
 
@@ -268,5 +274,8 @@ void UTIL_LinkAlienStructureToTask(bot_t* pBot, edict_t* NewStructure);
 int UTIL_GetNumWeaponsOfTypeInPlay(const NSWeapon WeaponType);
 // Returns how many heavy armour and jetpacks have been placed at base, and how many marines have heavy armour or a jetpack equipped
 int UTIL_GetNumEquipmentInPlay();
+
+// Should the commander use distress beacon? Determines if the base is being overwhelmed by aliens
+bool UTIL_BaseIsInDistress();
 
 #endif

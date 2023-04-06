@@ -21,14 +21,16 @@ void MarineThink(bot_t* pBot)
 
 	if (pBot->CurrentEnemy > -1)
 	{
-		MarineCombatThink(pBot);
-
-		if (pBot->DesiredCombatWeapon == WEAPON_NONE)
+		if (MarineCombatThink(pBot))
 		{
-			pBot->DesiredCombatWeapon = BotMarineChooseBestWeapon(pBot, pBot->TrackedEnemies[pBot->CurrentEnemy].EnemyEdict);
-		}
 
-		return;
+			if (pBot->DesiredCombatWeapon == WEAPON_NONE)
+			{
+				pBot->DesiredCombatWeapon = BotMarineChooseBestWeapon(pBot, pBot->TrackedEnemies[pBot->CurrentEnemy].EnemyEdict);
+			}
+
+			return;
+		}
 	}
 
 	edict_t* DangerTurret = BotGetNearestDangerTurret(pBot, UTIL_MetresToGoldSrcUnits(15.0f));
@@ -119,11 +121,11 @@ void MarineThink(bot_t* pBot)
 
 }
 
-void MarineCombatThink(bot_t* pBot)
+bool MarineCombatThink(bot_t* pBot)
 {
 	edict_t* pEdict = pBot->pEdict;
 
-	if (pBot->CurrentEnemy < 0) { return; }
+	if (pBot->CurrentEnemy < 0) { return false; }
 
 	edict_t* CurrentEnemy = pBot->TrackedEnemies[pBot->CurrentEnemy].EnemyEdict;
 	enemy_status* TrackedEnemyRef = &pBot->TrackedEnemies[pBot->CurrentEnemy];
@@ -155,20 +157,19 @@ void MarineCombatThink(bot_t* pBot)
 				{
 					MoveTo(pBot, Armoury->v.origin, MOVESTYLE_NORMAL);
 				}
-				return;
+				return true;
 			}
 		}
 
 		MarineHuntEnemy(pBot, TrackedEnemyRef);
-
-		return;
+		return true;
 	}
 
 	// ENEMY IS VISIBLE
 
 	pBot->DesiredCombatWeapon = BotMarineChooseBestWeapon(pBot, CurrentEnemy);
 
-	if (UTIL_GetBotCurrentWeapon(pBot) != pBot->DesiredCombatWeapon) { return; }
+	if (UTIL_GetBotCurrentWeapon(pBot) != pBot->DesiredCombatWeapon) { return true; }
 
 	NSPlayerClass EnemyClass = UTIL_GetPlayerClass(CurrentEnemy);
 	float DistFromEnemySq = vDist2DSq(pEdict->v.origin, CurrentEnemy->v.origin);
@@ -186,7 +187,7 @@ void MarineCombatThink(bot_t* pBot)
 
 		MoveTo(pBot, RetreatLocation, MOVESTYLE_NORMAL);
 
-		return;
+		return true;
 	}
 
 	// If we're really low on ammo then retreat to the nearest armoury while continuing to engage
@@ -205,7 +206,7 @@ void MarineCombatThink(bot_t* pBot)
 					BotUseObject(pBot, Armoury, true);
 				}
 
-				return;
+				return true;
 			}
 			else
 			{
@@ -217,7 +218,7 @@ void MarineCombatThink(bot_t* pBot)
 		{
 			BotAttackTarget(pBot, CurrentEnemy);
 		}
-		return;
+		return true;
 	}
 
 	if (EnemyClass == CLASS_GORGE || IsPlayerGestating(CurrentEnemy))
@@ -267,7 +268,7 @@ void MarineCombatThink(bot_t* pBot)
 
 		}
 
-		return;
+		return true;
 	}
 
 	if (DistFromEnemySq > sqrf(MaxWeaponRange))
@@ -314,7 +315,7 @@ void MarineCombatThink(bot_t* pBot)
 				BotJump(pBot);
 			}
 
-			return;
+			return true;
 		}
 
 		Vector EnemyVelocity = UTIL_GetVectorNormal2D(CurrentEnemy->v.velocity);
@@ -402,7 +403,7 @@ void MarineCombatThink(bot_t* pBot)
 		}
 
 	}
-
+	return true;
 }
 
 void MarineHuntEnemy(bot_t* pBot, enemy_status* TrackedEnemy)

@@ -113,6 +113,8 @@ bool UTIL_ObservatoryResearchIsAvailable(const NSResearch Research);
 bool UTIL_ArmouryResearchIsAvailable(const NSResearch Research);
 bool UTIL_ElectricalResearchIsAvailable(const edict_t* Structure);
 
+
+
 bool BotCommanderPlaceStructure(bot_t* pBot, int ActionIndex, int Priority);
 bool BotCommanderDropItem(bot_t* pBot, int ActionIndex, int Priority);
 bool BotCommanderRecycleStructure(bot_t* pBot, int ActionIndex, int Priority);

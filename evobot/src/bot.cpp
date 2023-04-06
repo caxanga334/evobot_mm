@@ -105,6 +105,11 @@ Vector UTIL_GetEntityGroundLocation(const edict_t* pEntity)
 		return UTIL_GetFloorUnderEntity(pEntity);
 	}
 	
+	if (UTIL_GetStructureTypeFromEdict(pEntity) == STRUCTURE_ALIEN_HIVE)
+	{
+		return UTIL_GetFloorUnderEntity(pEntity);
+	}
+
 	return UTIL_GetBottomOfCollisionHull(pEntity);
 }
 
@@ -265,13 +270,13 @@ void BotCreate(edict_t *pPlayer, int Team)
 
 	//char logName[64];
 
-	//sprintf(logName, "Bot%d_log.txt", index);
+	//sprintf(logName, "Bot_%d_log.txt", index);
 
 	//pBot->logFile = fopen(logName, "w+");
 
 	//if (pBot->logFile)
 	//{
-		//fprintf(pBot->logFile, "Log for %s\n\n", c_name);
+	//	fprintf(pBot->logFile, "Log for %s\n\n", c_name);
 	//}
 }
 
@@ -330,7 +335,7 @@ void UTIL_ClearAllBotData(bot_t* pBot)
 
 	if (pBot->logFile)
 	{
-		//fflush(pBot->logFile);
+		fflush(pBot->logFile);
 		fclose(pBot->logFile);
 	}
 }
@@ -849,19 +854,11 @@ void BotThink(bot_t *pBot)
 
 				if (IsPlayerMarine(pBot->pEdict))
 				{
-					//fprintf(pBot->logFile, "\nMarine Think Start\n");
-					//fflush(pBot->logFile);
 					MarineThink(pBot);
-					//fprintf(pBot->logFile, "Marine Think End\n");
-					//fflush(pBot->logFile);
 				}
 				else
 				{
-					//fprintf(pBot->logFile, "\nAlien Think Start\n");
-					//fflush(pBot->logFile);
 					AlienThink(pBot);
-					//fprintf(pBot->logFile, "Alien Think End\n");
-					//fflush(pBot->logFile);
 				}
 			}
 		}		
@@ -1450,8 +1447,9 @@ int UTIL_GetNextEnemyTarget(bot_t* pBot)
 			}
 			else
 			{
+				bool bHasLOS = UTIL_QuickTrace(pBot->pEdict, pBot->CurrentEyePosition, pBot->TrackedEnemies[i].EnemyEdict->v.origin);
 				// Don't hunt an enemy if we have something important to do
-				if (pBot->PrimaryBotTask.bOrderIsUrgent || pBot->SecondaryBotTask.bOrderIsUrgent || pBot->WantsAndNeedsTask.bOrderIsUrgent) { continue; }
+				if (!bHasLOS && (pBot->PrimaryBotTask.bOrderIsUrgent || pBot->SecondaryBotTask.bOrderIsUrgent || pBot->WantsAndNeedsTask.bOrderIsUrgent)) { continue; }
 				if (ClosestNonVisibleEnemy < 0 || thisDist < MinNonVisibleDist)
 				{
 					ClosestNonVisibleEnemy = i;
@@ -2354,25 +2352,17 @@ void AlienThink(bot_t* pBot)
 			switch (pBot->bot_ns_class)
 			{
 			case CLASS_SKULK:
-				//fprintf(pBot->logFile, "Skulk combat think\n");
-				//fflush(pBot->logFile);
 				SkulkCombatThink(pBot);
 				return;
 			case CLASS_GORGE:
-				//fprintf(pBot->logFile, "Gorge combat think\n");
-				//fflush(pBot->logFile);
 				GorgeCombatThink(pBot);
 				return;
 			case CLASS_LERK:
 				return;
 			case CLASS_FADE:
-				//fprintf(pBot->logFile, "Fade combat think\n");
-				//fflush(pBot->logFile);
 				FadeCombatThink(pBot);
 				return;
 			case CLASS_ONOS:
-				//fprintf(pBot->logFile, "Onos combat think\n");
-				//fflush(pBot->logFile);
 				OnosCombatThink(pBot);
 				return;
 			default:
@@ -2383,29 +2373,15 @@ void AlienThink(bot_t* pBot)
 
 	if (!pBot->CurrentTask) { pBot->CurrentTask = &pBot->PrimaryBotTask; }
 
-	//fprintf(pBot->logFile, "Start update and clear\n");
-	//fflush(pBot->logFile);
-
 	UpdateAndClearTasks(pBot);
-
-	//fprintf(pBot->logFile, "End update and clear\n");
-	//fflush(pBot->logFile);
 
 	AlienCheckWantsAndNeeds(pBot);
 
-	//fprintf(pBot->logFile, "End check wants and needs\n");
-	//fflush(pBot->logFile);
-
-	//fprintf(pBot->logFile, "Task Types: Primary %s, Secondary %s, Wants %s\n", UTIL_TaskTypeToChar(pBot->PrimaryBotTask.TaskType), UTIL_TaskTypeToChar(pBot->SecondaryBotTask.TaskType), UTIL_TaskTypeToChar(pBot->WantsAndNeedsTask.TaskType));
-	//fflush(pBot->logFile);
-
 	if (pBot->PrimaryBotTask.TaskType == TASK_NONE || !pBot->PrimaryBotTask.bOrderIsUrgent)
 	{
-		//fprintf(pBot->logFile, "Start get best role\n");
-		//fflush(pBot->logFile);
+
 		BotRole RequiredRole = AlienGetBestBotRole(pBot);
-		//fprintf(pBot->logFile, "End get best role\n");
-		//fflush(pBot->logFile);
+
 		if (pBot->CurrentRole != RequiredRole)
 		{
 			UTIL_ClearAllBotTasks(pBot);
@@ -2414,12 +2390,8 @@ void AlienThink(bot_t* pBot)
 			pBot->CurrentTask = &pBot->PrimaryBotTask;
 		}
 
-		//fprintf(pBot->logFile, "Set primary task for %s\n", UTIL_BotRoleToChar(pBot->CurrentRole));
-		//fflush(pBot->logFile);
 		BotAlienSetPrimaryTask(pBot, &pBot->PrimaryBotTask);
 
-		//fprintf(pBot->logFile, "End primary task for %s\n", UTIL_BotRoleToChar(pBot->CurrentRole));
-		//fflush(pBot->logFile);
 	}
 
 	if (pBot->SecondaryBotTask.TaskType == TASK_NONE || !pBot->SecondaryBotTask.bOrderIsUrgent)
@@ -2431,11 +2403,7 @@ void AlienThink(bot_t* pBot)
 
 	if (pBot->CurrentTask && pBot->CurrentTask->TaskType != TASK_NONE)
 	{
-		//fprintf(pBot->logFile, "Start task %s\n", UTIL_TaskTypeToChar(pBot->CurrentTask->TaskType));
-		//fflush(pBot->logFile);
 		BotProgressTask(pBot, pBot->CurrentTask);
-		//fprintf(pBot->logFile, "End task %s\n", UTIL_TaskTypeToChar(pBot->CurrentTask->TaskType));
-		//fflush(pBot->logFile);
 	}
 }
 
@@ -2577,13 +2545,29 @@ void AlienProgressEvolveTask(bot_t* pBot, bot_task* Task)
 			
 			if (NearestHive)
 			{
-				if (vDist2DSq(pBot->pEdict->v.origin, NearestHive->Location) > sqrf(UTIL_MetresToGoldSrcUnits(10.0f)))
+				if (vDist2DSq(pBot->pEdict->v.origin, NearestHive->Location) > sqrf(UTIL_MetresToGoldSrcUnits(5.0f)))
 				{
 					MoveTo(pBot, NearestHive->FloorLocation, MOVESTYLE_NORMAL);
 					return;
 				}
 				else
 				{
+					dtPolyRef BotPoly = UTIL_GetNavAreaAtLocation(BUILDING_REGULAR_NAV_PROFILE, pBot->CurrentFloorPosition);
+
+					if (BotPoly != SAMPLE_POLYAREA_GROUND)
+					{
+						Vector MoveLoc = UTIL_ProjectPointToNavmesh(pBot->pEdict->v.origin, BUILDING_REGULAR_NAV_PROFILE);
+
+						if (MoveLoc != ZERO_VECTOR)
+						{
+							Vector MoveDir = UTIL_GetVectorNormal2D(MoveLoc - pBot->CurrentFloorPosition);
+
+
+							MoveDirectlyTo(pBot, MoveLoc + (MoveDir * (32.0f)));
+							return;
+						}
+					}
+
 					pBot->pEdict->v.impulse = Task->Evolution;
 				}
 			}
@@ -2969,7 +2953,7 @@ void OnosCombatThink(bot_t* pBot)
 
 	enemy_status* TrackedEnemyRef = &pBot->TrackedEnemies[pBot->CurrentEnemy];
 
-	bool bLowOnHealth = (UTIL_GetPlayerOverallHealthPercent(pEdict) < 0.33f);
+	bool bLowOnHealth = (UTIL_GetPlayerOverallHealthPercent(pEdict) < 0.4f);
 
 	if (bLowOnHealth)
 	{
@@ -3318,6 +3302,9 @@ void AlienHarasserSetPrimaryTask(bot_t* pBot, bot_task* Task)
 
 void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task)
 {
+
+	bool bCappingIsUrgent = UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER) < 3;
+
 	int RequiredRes = kResourceTowerCost;
 
 	if (!IsPlayerGorge(pBot->pEdict))
@@ -3336,7 +3323,7 @@ void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task)
 				Task->TaskType = TASK_CAP_RESNODE;
 				Task->TaskLocation = EmptyResNode->origin;
 				Task->StructureType = STRUCTURE_ALIEN_RESTOWER;
-				Task->bOrderIsUrgent = false;
+				Task->bOrderIsUrgent = bCappingIsUrgent;
 				return;
 			}
 			else
@@ -3387,12 +3374,17 @@ void AlienCapperSetPrimaryTask(bot_t* pBot, bot_task* Task)
 	{
 		Task->TaskType = TASK_CAP_RESNODE;
 		Task->TaskLocation = RandomResNode->origin;
-		Task->bOrderIsUrgent = true;
+		Task->bOrderIsUrgent = bCappingIsUrgent;
 		Task->StructureType = STRUCTURE_ALIEN_RESTOWER;
 		return;
 	}
 
-	return;
+	// Can't do anything as gorge, return to skulk
+	if (IsPlayerGorge(pBot->pEdict))
+	{
+		BotEvolveLifeform(pBot, CLASS_SKULK);
+	}
+	
 }
 
 NSDeployableItem UTIL_WeaponTypeToDeployableItem(const NSWeapon WeaponType)
@@ -3442,41 +3434,6 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 	// If we already have a build task then do nothing
 	if (Task->TaskType == TASK_BUILD) { return; }
 
-	// Next check if we have a minimum number of resource nodes in place
-
-	int NumResourceNodes = UTIL_GetNumPlacedStructuresOfType(STRUCTURE_ALIEN_RESTOWER);
-
-	if (NumResourceNodes < min_desired_resource_towers)
-	{
-		const resource_node* FreeResNode = nullptr;
-
-		if (!IsPlayerGorge(pEdict) || BotHasWeapon(pBot, WEAPON_GORGE_BILEBOMB))
-		{
-			FreeResNode = UTIL_FindEligibleResNodeFurthestFromLocation(UTIL_GetCommChairLocation(), ALIEN_TEAM, !IsPlayerSkulk(pBot->pEdict));
-		}
-		else
-		{
-			FreeResNode = UTIL_AlienFindUnclaimedResNodeFurthestFromLocation(pBot, UTIL_GetCommChairLocation(), true);
-		}
-
-		if (FreeResNode)
-		{
-			if (FreeResNode->bIsOccupied)
-			{
-				Task->TaskType = TASK_CAP_RESNODE;
-				Task->TaskLocation = FreeResNode->origin;
-				Task->StructureType = STRUCTURE_ALIEN_RESTOWER;
-			}
-			else
-			{
-				Task->TaskType = TASK_BUILD;
-				Task->TaskLocation = FreeResNode->origin;
-				Task->StructureType = STRUCTURE_ALIEN_RESTOWER;
-			}
-
-			return;
-		}
-	}
 
 	NSStructureType TechChamberToBuild = STRUCTURE_NONE;
 	const hive_definition* HiveIndex = nullptr;
@@ -3542,7 +3499,7 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		}
 	}
 
-	if (UTIL_GetNumUnbuiltHives() > 0 && !UTIL_BotWithBuildTaskExists(STRUCTURE_ALIEN_HIVE))
+	if (!UTIL_HiveIsInProgress() && UTIL_GetNumUnbuiltHives() > 0 && !UTIL_BotWithBuildTaskExists(STRUCTURE_ALIEN_HIVE))
 	{
 		const hive_definition* UnbuiltHiveIndex = UTIL_GetClosestViableUnbuiltHive(pEdict->v.origin);
 
@@ -3566,6 +3523,54 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		}
 	}
 
+	// Build 2 defence chambers under every hive
+	if (UTIL_ActiveHiveWithTechExists(HIVE_TECH_DEFENCE))
+	{
+		const hive_definition* HiveNeedsSupporting = UTIL_GetActiveHiveWithoutChambers(HIVE_TECH_DEFENCE, 2);
+
+		if (HiveNeedsSupporting)
+		{
+			Vector BuildLocation = UTIL_GetRandomPointOnNavmeshInRadius(BUILDING_REGULAR_NAV_PROFILE, HiveNeedsSupporting->FloorLocation, UTIL_MetresToGoldSrcUnits(5.0f));
+
+			Task->TaskType = TASK_BUILD;
+			Task->TaskLocation = BuildLocation;
+			Task->StructureType = STRUCTURE_ALIEN_DEFENCECHAMBER;
+			Task->bOrderIsUrgent = false;
+		}
+	}
+
+	// Make sure every hive has a movement chamber
+	if (UTIL_ActiveHiveWithTechExists(HIVE_TECH_MOVEMENT))
+	{
+		const hive_definition* HiveNeedsSupporting = UTIL_GetActiveHiveWithoutChambers(HIVE_TECH_MOVEMENT, 1);
+
+		if (HiveNeedsSupporting)
+		{
+			Vector BuildLocation = UTIL_GetRandomPointOnNavmeshInRadius(BUILDING_REGULAR_NAV_PROFILE, HiveNeedsSupporting->FloorLocation, UTIL_MetresToGoldSrcUnits(5.0f));
+
+			Task->TaskType = TASK_BUILD;
+			Task->TaskLocation = BuildLocation;
+			Task->StructureType = STRUCTURE_ALIEN_MOVEMENTCHAMBER;
+			Task->bOrderIsUrgent = false;
+		}
+	}
+
+	// Make sure every hive has a sensory chamber
+	if (UTIL_ActiveHiveWithTechExists(HIVE_TECH_SENSORY))
+	{
+		const hive_definition* HiveNeedsSupporting = UTIL_GetActiveHiveWithoutChambers(HIVE_TECH_SENSORY, 1);
+
+		if (HiveNeedsSupporting)
+		{
+			Vector BuildLocation = UTIL_GetRandomPointOnNavmeshInRadius(BUILDING_REGULAR_NAV_PROFILE, HiveNeedsSupporting->FloorLocation, UTIL_MetresToGoldSrcUnits(5.0f));
+
+			Task->TaskType = TASK_BUILD;
+			Task->TaskLocation = BuildLocation;
+			Task->StructureType = STRUCTURE_ALIEN_SENSORYCHAMBER;
+			Task->bOrderIsUrgent = false;
+		}
+	}
+
 	const resource_node* NearestUnprotectedResNode = UTIL_GetNearestUnprotectedResNode(pBot->pEdict->v.origin);
 
 	if (NearestUnprotectedResNode)
@@ -3584,6 +3589,7 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 			Task->TaskType = TASK_BUILD;
 			Task->TaskLocation = BuildLocation;
 			Task->StructureType = STRUCTURE_ALIEN_OFFENCECHAMBER;
+			Task->bOrderIsUrgent = false;
 			return;
 		}
 
@@ -3596,6 +3602,7 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 				Task->TaskType = TASK_BUILD;
 				Task->TaskLocation = BuildLocation;
 				Task->StructureType = STRUCTURE_ALIEN_DEFENCECHAMBER;
+				Task->bOrderIsUrgent = false;
 				return;
 			}
 		}
@@ -3609,6 +3616,7 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 				Task->TaskType = TASK_BUILD;
 				Task->TaskLocation = BuildLocation;
 				Task->StructureType = STRUCTURE_ALIEN_MOVEMENTCHAMBER;
+				Task->bOrderIsUrgent = false;
 				return;
 			}
 		}
@@ -3622,6 +3630,7 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 				Task->TaskType = TASK_BUILD;
 				Task->TaskLocation = BuildLocation;
 				Task->StructureType = STRUCTURE_ALIEN_SENSORYCHAMBER;
+				Task->bOrderIsUrgent = false;
 				return;
 			}
 		}		
@@ -3863,10 +3872,14 @@ void BotMarineSetSecondaryTask(bot_t* pBot, bot_task* Task)
 
 	if (UnbuiltStructure)
 	{
+		NSStructureType StructureType = UTIL_GetStructureTypeFromEdict(UnbuiltStructure);
+
+		bool bIsImportantStructure = (StructureType == STRUCTURE_MARINE_PHASEGATE || StructureType == STRUCTURE_MARINE_RESTOWER);
+
 		pBot->SecondaryBotTask.TaskType = TASK_BUILD;
 		pBot->SecondaryBotTask.TaskTarget = UnbuiltStructure;
 		pBot->SecondaryBotTask.TaskLocation = UnbuiltStructure->v.origin;
-		pBot->SecondaryBotTask.bOrderIsUrgent = false;
+		pBot->SecondaryBotTask.bOrderIsUrgent = bIsImportantStructure;
 		return;
 	}
 	else
@@ -4136,11 +4149,11 @@ int BotGetPrimaryWeaponMaxAmmoReserve(bot_t* pBot)
 
 bool UTIL_IsAlienGetHealthTaskStillValid(bot_t* pBot, bot_task* Task)
 {
-	if (FNullEnt(Task->TaskTarget) || (Task->TaskTarget->v.deadflag == DEAD_DEAD)) { return false; }
+	if (FNullEnt(Task->TaskTarget) || (Task->TaskTarget->v.deadflag != DEAD_NO)) { return false; }
 
 	if (UTIL_IsEdictPlayer(Task->TaskTarget))
 	{
-		if (IsPlayerDead(Task->TaskTarget) || !IsPlayerGorge(Task->TaskTarget)) { return false; }
+		if (!IsPlayerGorge(Task->TaskTarget)) { return false; }
 	}
 	return (pBot->pEdict->v.health < pBot->pEdict->v.max_health) || (!IsPlayerSkulk(pBot->pEdict) && pBot->pEdict->v.armorvalue < (GetPlayerMaxArmour(pBot->pEdict) * 0.7f));
 }
@@ -4278,6 +4291,10 @@ bool UTIL_IsAlienBuildTaskStillValid(bot_t* pBot, bot_task* Task)
 
 	if (Task->StructureType == STRUCTURE_NONE) { return false; }
 
+	if (Task->BuildAttempts >= 3) { return false; }
+
+	if (Task->bIsWaitingForBuildLink && (gpGlobals->time - Task->LastBuildAttemptTime < 1.0f)) { return true; }
+
 	int NavProfileIndex = UTIL_GetMoveProfileForBot(pBot, pBot->BotNavInfo.MoveStyle);
 
 	if (!FNullEnt(Task->TaskTarget) && !UTIL_PointIsOnNavmesh(NavProfileIndex, UTIL_GetEntityGroundLocation(Task->TaskTarget), Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach))) { return false; }
@@ -4379,9 +4396,7 @@ bool UTIL_IsAlienBuildTaskStillValid(bot_t* pBot, bot_task* Task)
 		}
 	}
 
-	if (Task->bIsWaitingForBuildLink && (gpGlobals->time - Task->LastBuildAttemptTime < 1.0f)) { return true; }
-
-	if (Task->BuildAttempts > 3) { return false; }
+	
 
 	if (!FNullEnt(Task->TaskTarget))
 	{
@@ -4766,6 +4781,23 @@ void AlienProgressBuildTask(bot_t* pBot, bot_task* Task)
 		}
 	}
 
+	// If we are building a chamber
+	if (Task->StructureType != STRUCTURE_ALIEN_RESTOWER && Task->StructureType != STRUCTURE_ALIEN_HIVE)
+	{
+		dtPolyRef Poly = UTIL_GetNavAreaAtLocation(BUILDING_REGULAR_NAV_PROFILE, Task->TaskLocation);
+
+		if (Poly != SAMPLE_POLYAREA_GROUND)
+		{
+			Vector NewLocation = UTIL_GetRandomPointOnNavmeshInRadius(BUILDING_REGULAR_NAV_PROFILE, Task->TaskLocation, UTIL_MetresToGoldSrcUnits(2.0f));
+
+			if (NewLocation != ZERO_VECTOR)
+			{
+				Task->TaskLocation = NewLocation;
+				return;
+			}
+		}
+	}
+
 	float DesiredDist = (Task->StructureType == STRUCTURE_ALIEN_RESTOWER) ? UTIL_MetresToGoldSrcUnits(2.0f) : UTIL_MetresToGoldSrcUnits(1.1f);
 
 	float DistFromBuildLocation = vDist2DSq(pBot->pEdict->v.origin, Task->TaskLocation);
@@ -4805,7 +4837,6 @@ void AlienProgressBuildTask(bot_t* pBot, bot_task* Task)
 		LookAt(pBot, LookLocation);
 
 		if (gpGlobals->time - Task->LastBuildAttemptTime < 1.0f) { return; }
-
 
 		float LookDot = UTIL_GetDotProduct2D(UTIL_GetForwardVector2D(pBot->pEdict->v.v_angle), UTIL_GetVectorNormal2D(Task->TaskLocation - pBot->pEdict->v.origin));
 
@@ -6113,6 +6144,11 @@ void DEBUG_BotAttackTarget(bot_t* pBot, edict_t* Target)
 	}
 }
 
+bool UTIL_IsBotReloading(bot_t* pBot)
+{
+	return pBot->current_weapon.bIsReloading;
+}
+
 void BotAttackTarget(bot_t* pBot, edict_t* Target)
 {
 	if (FNullEnt(Target) || (Target->v.deadflag != DEAD_NO)) { return; }
@@ -6141,6 +6177,53 @@ void BotAttackTarget(bot_t* pBot, edict_t* Target)
 		}
 
 		return;
+	}
+
+	if (UTIL_WeaponNeedsReloading(CurrentWeapon))
+	{
+		bool bShouldReload = (BotGetCurrentWeaponReserveAmmo(pBot) > 0);
+
+		if (CurrentWeapon == WEAPON_MARINE_SHOTGUN && UTIL_IsEdictStructure(Target))
+		{
+			bShouldReload = bShouldReload && ((float)BotGetCurrentWeaponClipAmmo(pBot) / (float)BotGetCurrentWeaponMaxClipAmmo(pBot) < 0.5f);
+		}
+		else
+		{
+			bShouldReload = bShouldReload && BotGetCurrentWeaponClipAmmo(pBot) == 0;
+		}
+
+		if (bShouldReload)
+		{
+			pBot->pEdict->v.button |= IN_RELOAD;	
+			pBot->current_weapon.bIsReloading = true;			
+		}
+		
+	}
+
+	if (UTIL_IsBotReloading(pBot))
+	{
+		if (UTIL_IsEdictStructure(Target))
+		{
+			if (BotGetCurrentWeaponClipAmmo(pBot) == BotGetCurrentWeaponMaxClipAmmo(pBot) || BotGetCurrentWeaponReserveAmmo(pBot) == 0)
+			{
+				pBot->current_weapon.bIsReloading = false;
+			}
+			else
+			{
+				return;
+			}
+		}
+		else
+		{
+			if (BotGetCurrentWeaponClipAmmo(pBot) > 0)
+			{
+				pBot->current_weapon.bIsReloading = false;
+			}
+			else
+			{
+				return;
+			}
+		}
 	}
 
 	Vector TargetAimDir = ZERO_VECTOR;
@@ -7306,6 +7389,11 @@ bool UTIL_IsEdictPlayer(const edict_t* edict)
 	return false;
 }
 
+bool UTIL_IsEdictStructure(const edict_t* edict)
+{
+	return (UTIL_GetStructureTypeFromEdict(edict) != STRUCTURE_NONE);
+}
+
 void AlienReceiveAlert(bot_t* pBot, const Vector Location, const PlayerAlertType AlertType)
 {
 	if (IsPlayerGorge(pBot->pEdict) || pBot->CurrentRole == BOT_ROLE_BUILDER) { return; }
@@ -7434,6 +7522,8 @@ void AlienGuardLocation(bot_t* pBot, const Vector Location)
 
 void BotSwitchToWeapon(bot_t* pBot, NSWeapon NewWeaponSlot)
 {
+	pBot->current_weapon.bIsReloading = false;
+
 	char* WeaponName = UTIL_WeaponTypeToClassname(NewWeaponSlot);
 
 	FakeClientCommand(pBot->pEdict, WeaponName, NULL, NULL);
