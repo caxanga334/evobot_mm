@@ -3041,8 +3041,6 @@ float GetPlayerEnergyRegenPerSecond(edict_t* Player)
 
 void AlienDestroyerSetPrimaryTask(bot_t* pBot, bot_task* Task)
 {
-	
-
 	if (!IsPlayerFade(pBot->pEdict) && !IsPlayerOnos(pBot->pEdict))
 	{
 		if (pBot->resources >= kFadeEvolutionCost)

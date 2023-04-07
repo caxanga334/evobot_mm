@@ -1930,7 +1930,8 @@ dtStatus FindPathClosestToPoint(bot_t* pBot, const BotMoveStyle MoveStyle, const
 			{
 				bool isCrouchedArea = (CurrArea == SAMPLE_POLYAREA_CROUCH);
 
-				path[(nVert)].Location = hit.vecEndPos + UTIL_OriginOffsetFromFloor(pBot->pEdict, isCrouchedArea);
+				path[(nVert)].Location = hit.vecEndPos + Vector(0.0f, 0.0f, 2.0f);
+
 			}
 
 		}
@@ -2045,7 +2046,7 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 		case SAMPLE_POLYAREA_GROUND:
 			if (!bIsAtFinalPathPoint)
 			{
-				return (bAtOrPastDestination || (vDist2D(pEdict->v.origin, CurrentMoveDest) <= 8.0f && (fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f)));
+				return (bAtOrPastDestination || (vDist2D(pEdict->v.origin, CurrentMoveDest) <= 8.0f && (fabs(pBot->CurrentFloorPosition.z - CurrentMoveDest.z) < 50.0f)));
 			}
 			else
 			{
@@ -2072,7 +2073,7 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 				}
 				else
 				{
-					return (vDist2D(pEdict->v.origin, CurrentMoveDest) <= playerRadius && (fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f) && pBot->BotNavInfo.IsOnGround);
+					return (vDist2D(pEdict->v.origin, CurrentMoveDest) <= playerRadius && (fabs(pBot->CurrentFloorPosition.z - CurrentMoveDest.z) < 50.0f) && pBot->BotNavInfo.IsOnGround);
 				}
 			}
 			else
@@ -2080,7 +2081,7 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 				return (vDist2D(pEdict->v.origin, CurrentMoveDest) <= playerRadius && (pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f && pBot->BotNavInfo.IsOnGround);
 			}
 		case SAMPLE_POLYAREA_WALLCLIMB:
-			return ((bAtOrPastDestination && (fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f)));
+			return ((bAtOrPastDestination && (fabs(pBot->CurrentFloorPosition.z - CurrentMoveDest.z) < 50.0f)));
 		case SAMPLE_POLYAREA_LADDER:
 			if (CurrentMoveDest.z > PrevMoveDest.z)
 			{
@@ -2673,25 +2674,26 @@ void PhaseGateMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 
 bool IsBotOffPath(const bot_t* pBot)
 {
+	// Can't be off the path if we don't have one...
 	if (pBot->BotNavInfo.PathSize == 0) { return false; }
 	// Give us a chance to land before deciding we're off the path
 	if (!pBot->BotNavInfo.IsOnGround) { return false; }
 
+	// Wall climbing and phase gates will cause all sorts of fuckery, don't even try and figure out if we're off-path...
 	if (pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_WALLCLIMB || pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_PHASEGATE)
 	{
 		return false;
 	}
 
-	if (pBot->BotNavInfo.PathSize == 0) { return false; }
-
 	edict_t* pEdict = pBot->pEdict;
 
-	Vector MoveFrom = pBot->pEdict->v.origin;
+	Vector MoveFrom = pBot->CurrentFloorPosition;
 	
 	if (pBot->BotNavInfo.CurrentPathPoint > 0)
 	{
 		MoveFrom = pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint - 1].Location;
 	}
+
 	Vector MoveTo = pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].Location;
 
 	float PlayerRadiusSq = sqrf(UTIL_GetPlayerRadius(pBot->pEdict));
@@ -2699,41 +2701,34 @@ bool IsBotOffPath(const bot_t* pBot)
 
 	Vector vForward = UTIL_GetVectorNormal2D(MoveTo - MoveFrom);
 
+	Vector PointOnPath = vClosestPointOnLine2D(MoveFrom, MoveTo, pBot->CurrentFloorPosition);
+
 
 
 	// TODO: This sucks
 	if (pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_GROUND || pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_CROUCH)
 	{
-		if (!pBot->BotNavInfo.IsOnGround) { return false; }
 
 		// If we're on the from or to move points, but the height is significantly different, we must be under or over the path somehow
-		if (vDist2DSq(pBot->pEdict->v.origin, MoveFrom) < sqrf(5.0f) && fabs(pBot->pEdict->v.origin.z - MoveFrom.z) > PlayerHeight)
+		if (vEquals(PointOnPath, MoveFrom, 2.0f) && fabs(pBot->CurrentFloorPosition.z - MoveFrom.z) > PlayerHeight)
 		{
 			return true;
 
 		}
 
-		if (vDist2DSq(pBot->pEdict->v.origin, MoveTo) < sqrf(5.0f) && fabs(pBot->pEdict->v.origin.z - MoveTo.z) > PlayerHeight)
+		if (vEquals(PointOnPath, MoveTo, 2.0f) && fabs(pBot->CurrentFloorPosition.z - MoveTo.z) > PlayerHeight)
 		{
 			return true;
 
 			
 		}
 
-		Vector NearestPoint = vClosestPointOnLine2D(MoveFrom, MoveTo, pEdict->v.origin);
-
-		if (NearestPoint == MoveFrom || NearestPoint == MoveTo)
-		{
-			return vDist2DSq(pBot->pEdict->v.origin, NearestPoint) > sqrf(50.0f);
-		}
-
-
 		return false;
 	}
 
 	if (pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_JUMP || pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_HIGHJUMP)
 	{
-		if (pBot->BotNavInfo.IsOnGround && (MoveTo.z - pEdict->v.origin.z) > MAX_JUMP_HEIGHT)
+		if (pBot->BotNavInfo.IsOnGround && (MoveTo.z - pBot->CurrentFloorPosition.z) > MAX_JUMP_HEIGHT)
 		{
 			return true;
 		}
@@ -2743,7 +2738,7 @@ bool IsBotOffPath(const bot_t* pBot)
 
 	if (pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_FALL || pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].area == SAMPLE_POLYAREA_HIGHFALL)
 	{
-		if (pBot->BotNavInfo.IsOnGround && (MoveTo.z - pEdict->v.origin.z) > 18.0f)
+		if (vEquals(PointOnPath, MoveTo, 2.0f) && fabs(pBot->CurrentFloorPosition.z - MoveTo.z) > PlayerHeight)
 		{
 			return true;
 		}
@@ -4270,7 +4265,7 @@ bool BotIsAtLocation(const bot_t* pBot, const Vector& Destination)
 {
 	if (!Destination || !(pBot->pEdict->v.flags & FL_ONGROUND)) { return false; }
 
-	return (vDist2DSq(pBot->pEdict->v.origin, Destination) < sqrf(UTIL_GetPlayerRadius(pBot->pEdict)) && fabs(pBot->pEdict->v.origin.z - Destination.z) <= UTIL_GetPlayerHeight(pBot->pEdict, false));
+	return (vDist2DSq(pBot->pEdict->v.origin, Destination) < sqrf(UTIL_GetPlayerRadius(pBot->pEdict)) && fabs(pBot->CurrentFloorPosition.z - Destination.z) <= UTIL_GetPlayerHeight(pBot->pEdict, false));
 }
 
 Vector UTIL_ProjectPointToNavmesh(const Vector& Location)
@@ -4718,13 +4713,23 @@ Vector UTIL_GetNearestLadderCentrePoint(edict_t* pEdict)
 
 float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& ClimbEnd)
 {
-	Vector StartTrace = ClimbEnd + Vector(0.0f, 0.0f, 1.0f);
+	TraceResult hit;
+
+	Vector StartTrace = ClimbEnd;
+
+	UTIL_TraceLine(ClimbEnd, ClimbEnd - Vector(0.0f, 0.0f, 50.0f), ignore_monsters, nullptr, &hit);
+
+	if (hit.flFraction < 1.0f)
+	{
+		StartTrace.z = hit.vecEndPos.z + 18.0f;
+	}	
+	
 	Vector EndTrace = ClimbStart;
 	EndTrace.z = StartTrace.z;
 
 	Vector CurrTraceStart = StartTrace;
 
-	TraceResult hit;
+	
 	UTIL_TraceHull(StartTrace, EndTrace, ignore_monsters, head_hull, nullptr, &hit);
 
 	if (hit.flFraction >= 1.0f && !hit.fStartSolid)
