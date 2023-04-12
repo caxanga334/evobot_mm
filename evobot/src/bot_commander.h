@@ -122,7 +122,7 @@ bool BotCommanderUpgradeStructure(bot_t* pBot, int ActionIndex, int Priority);
 bool BotCommanderResearchTech(bot_t* pBot, int ActionIndex, int Priority);
 bool BotCommanderSelectStructure(bot_t* pBot, const edict_t* Structure, int ActionIndex, int Priority);
 
-bool UTIL_ResearchIsComplete(const NSResearch Research);
+
 
 int UTIL_GetCostOfResearch(const NSResearch Research);
 

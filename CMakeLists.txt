@@ -17,14 +17,29 @@ set(CMAKE_SHARED_LIBRARY_PREFIX "")
 set(CMAKE_STATIC_LIBRARY_PREFIX "")
 
 add_library(Detour STATIC)
+
+if (LINUX)
+    set_target_properties(Detour PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
+endif()
+
 target_include_directories(Detour PRIVATE "${PROJECT_SOURCE_DIR}")
 add_subdirectory("Detour")
 
 add_library(DetourTileCache STATIC)
+
+if (LINUX)
+    set_target_properties(DetourTileCache PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
+endif()
+
 target_include_directories(DetourTileCache PRIVATE "${PROJECT_SOURCE_DIR}")
 add_subdirectory("DetourTileCache")
 
 add_library(evobot SHARED)
+
+if (LINUX)
+    set_target_properties(evobot PROPERTIES COMPILE_FLAGS "-m32" LINK_FLAGS "-m32")
+endif()
+
 add_dependencies(evobot Detour DetourTileCache)
 target_include_directories(evobot PRIVATE "${PROJECT_SOURCE_DIR}")
 target_link_libraries(evobot PRIVATE Detour DetourTileCache)

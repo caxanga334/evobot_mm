@@ -220,7 +220,7 @@ void BlockedMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
 // Called by NewMove, determines the movement direction and inputs required to drop down from start to end points
 void FallMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
 // Called by NewMove, determines the movement direction and inputs required to climb a ladder to reach endpoint
-void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint);
+void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, float RequiredClimbHeight);
 // Called by NewMove, determines the movement direction and inputs required to climb a wall to reach endpoint
 void WallClimbMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, float RequiredClimbHeight);
 // Called by NewMove, determines the movement direction and inputs required to use a phase gate to reach end point
@@ -400,7 +400,7 @@ Vector UTIL_GetNearestLadderTopPoint(edict_t* pEdict);
 Vector UTIL_GetNearestLadderBottomPoint(edict_t* pEdict);
 
 // From the given start point, determine how high up the bot needs to climb to get to climb end. Will allow the bot to climb over railings
-float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& ClimbEnd);
+float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& ClimbEnd, const int HullNum);
 
 
 // Clears the bot's path and sets the path size to 0

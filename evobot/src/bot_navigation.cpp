@@ -1620,9 +1620,18 @@ dtStatus FindPhaseGatePathToPoint(bot_t* pBot, Vector FromLocation, Vector ToLoc
 
 		if (CurrArea == SAMPLE_POLYAREA_WALLCLIMB || CurrArea == SAMPLE_POLYAREA_LADDER)
 		{
-			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location);
+			int HullNum = GetPlayerHullIndex(pBot->pEdict, false);
+			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location, HullNum);
 			path[(nVert)].requiredZ = fmaxf(NewRequiredZ, path[(nVert)].Location.z);
 
+			if (CurrArea == SAMPLE_POLYAREA_LADDER)
+			{
+				path[(nVert)].requiredZ += 5.0f;
+			}
+		}
+		else
+		{
+			path[(nVert)].requiredZ = path[(nVert)].Location.z;
 		}
 
 		path[(nVert)].flag = straightStartPhasePathFlags[nVert];
@@ -1660,9 +1669,14 @@ dtStatus FindPhaseGatePathToPoint(bot_t* pBot, Vector FromLocation, Vector ToLoc
 
 		if (CurrArea == SAMPLE_POLYAREA_WALLCLIMB)
 		{
-			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[((nVert + StartVertCount) - 1)].Location, path[(nVert + StartVertCount)].Location);
+			int HullNum = GetPlayerHullIndex(pBot->pEdict, false);
+			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[((nVert + StartVertCount) - 1)].Location, path[(nVert + StartVertCount)].Location, HullNum);
 			path[(nVert + StartVertCount)].requiredZ = fmaxf(NewRequiredZ, path[(nVert + StartVertCount)].Location.z);
 
+		}
+		else
+		{
+			path[(nVert)].requiredZ = path[(nVert)].Location.z;
 		}
 
 		path[(nVert + StartVertCount)].flag = (nVert == 0) ? SAMPLE_POLYFLAGS_PHASEGATE : straightEndPhasePathFlags[nVert];
@@ -1793,9 +1807,18 @@ dtStatus FindPathClosestToPoint(const int NavProfileIndex, const Vector& FromLoc
 
 		if (CurrArea == SAMPLE_POLYAREA_WALLCLIMB || CurrArea == SAMPLE_POLYAREA_LADDER)
 		{
-			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location);
+			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location, head_hull);
 			path[(nVert)].requiredZ = fmaxf(NewRequiredZ, path[(nVert)].Location.z);
 
+			if (CurrArea == SAMPLE_POLYAREA_LADDER)
+			{
+				path[(nVert)].requiredZ += 5.0f;
+			}
+
+		}
+		else
+		{
+			path[(nVert)].requiredZ = path[(nVert)].Location.z;
 		}
 
 		path[(nVert)].flag = straightPathFlags[nVert];
@@ -1940,9 +1963,19 @@ dtStatus FindPathClosestToPoint(bot_t* pBot, const BotMoveStyle MoveStyle, const
 
 		if (CurrArea == SAMPLE_POLYAREA_WALLCLIMB || CurrArea == SAMPLE_POLYAREA_LADDER)
 		{
-			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location);
+			int HullNum = GetPlayerHullIndex(pBot->pEdict, false);
+			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location, HullNum);
 			path[(nVert)].requiredZ = fmaxf(NewRequiredZ, path[(nVert)].Location.z);
 
+			if (CurrArea == SAMPLE_POLYAREA_LADDER)
+			{
+				path[(nVert)].requiredZ += 5.0f;
+			}
+
+		}
+		else
+		{
+			path[(nVert)].requiredZ = path[(nVert)].Location.z;
 		}
 
 		path[(nVert)].flag = straightPathFlags[nVert];
@@ -2069,11 +2102,12 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 
 				if (DirectionDot >= -0.5f)
 				{
-					return (bAtOrPastDestination || UTIL_PointIsDirectlyReachable(pBot, CurrentPos, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location));
+					return bAtOrPastDestination && UTIL_PointIsDirectlyReachable(pBot, pBot->CurrentFloorPosition, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint + 1].Location);
 				}
 				else
 				{
-					return (vDist2D(pEdict->v.origin, CurrentMoveDest) <= playerRadius && (fabs(pBot->CurrentFloorPosition.z - CurrentMoveDest.z) < 50.0f) && pBot->BotNavInfo.IsOnGround);
+					return bAtOrPastDestination && pBot->BotNavInfo.IsOnGround;
+					//return (vDist2D(pEdict->v.origin, CurrentMoveDest) <= playerRadius && (fabs(pBot->CurrentFloorPosition.z - CurrentMoveDest.z) < 50.0f) && pBot->BotNavInfo.IsOnGround);
 				}
 			}
 			else
@@ -2089,7 +2123,7 @@ bool HasBotReachedPathPoint(const bot_t* pBot)
 			}
 			else
 			{
-				return ((BotPoly == DestinationPoly) && fabs(pEdict->v.origin.z - CurrentMoveDest.z) < 50.0f);
+				return (fabs(pBot->CollisionHullBottomLocation.z - CurrentMoveDest.z) < 50.0f);
 			}
 		default:
 			return (bAtOrPastDestination && UTIL_QuickTrace(pEdict, pEdict->v.origin, CurrentMoveDest));
@@ -2214,7 +2248,7 @@ void NewMove(bot_t* pBot)
 			WallClimbMove(pBot, MoveFrom, MoveTo, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].requiredZ);
 			break;
 		case SAMPLE_POLYAREA_LADDER:
-			LadderMove(pBot, MoveFrom, MoveTo);
+			LadderMove(pBot, MoveFrom, MoveTo, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].requiredZ);
 			break;
 		case SAMPLE_POLYAREA_PHASEGATE:
 			PhaseGateMove(pBot, MoveFrom, MoveTo);
@@ -2426,7 +2460,7 @@ void JumpMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 	}
 }
 
-void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
+void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, float RequiredClimbHeight)
 {
 	edict_t* pEdict = pBot->pEdict;
 
@@ -2455,7 +2489,7 @@ void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 
 
 			// We have reached our desired climb height and want to get off the ladder
-			if ((pBot->CollisionHullTopLocation.z >= EndPoint.z) && UTIL_QuickHullTrace(pEdict, pEdict->v.origin, Vector(EndPoint.x, EndPoint.y, pEdict->v.origin.z), head_hull))
+			if ((pBot->pEdict->v.origin.z >= RequiredClimbHeight) && UTIL_QuickHullTrace(pEdict, pEdict->v.origin, Vector(EndPoint.x, EndPoint.y, pEdict->v.origin.z), head_hull))
 			{
 				// Move directly towards the desired get-off point, looking slightly up still
 				pBot->desiredMovementDir = vForward;
@@ -2498,7 +2532,7 @@ void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 				if (bBlockedLeft && !bBlockedRight)
 				{
 					Vector LookLocation = pBot->pEdict->v.origin - (pBot->CurrentLadderNormal * 50.0f);
-					LookLocation.z = EndPoint.z + 100.0f;
+					LookLocation.z = RequiredClimbHeight + 100.0f;
 					MoveLookAt(pBot, LookLocation);
 
 					pBot->desiredMovementDir = ClimbRightNormal;
@@ -2508,7 +2542,7 @@ void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 				if (bBlockedRight && !bBlockedLeft)
 				{
 					Vector LookLocation = pBot->pEdict->v.origin - (pBot->CurrentLadderNormal * 50.0f);
-					LookLocation.z = EndPoint.z + 100.0f;
+					LookLocation.z = RequiredClimbHeight + 100.0f;
 					MoveLookAt(pBot, LookLocation);
 
 					pBot->desiredMovementDir = -ClimbRightNormal;
@@ -2550,10 +2584,10 @@ void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 					LookLocation = pBot->pEdict->v.origin - (pBot->CurrentLadderNormal * 50.0f);
 				}
 
-				LookLocation.z = EndPoint.z + 100.0f;
+				LookLocation.z = RequiredClimbHeight + 100.0f;
 				MoveLookAt(pBot, LookLocation);
 
-				if (EndPoint.z > pBot->pEdict->v.origin.z)
+				if (RequiredClimbHeight > pBot->pEdict->v.origin.z)
 				{
 					pBot->desiredMovementDir = -pBot->CurrentLadderNormal;
 				}
@@ -3648,7 +3682,7 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 	{
 		if (bReverseCourse)
 		{
-			LadderMove(pBot, MoveTo, MoveFrom);
+			LadderMove(pBot, MoveTo, MoveFrom, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].requiredZ);
 
 			// We're going DOWN the ladder
 			if (MoveTo.z > MoveFrom.z)
@@ -3661,7 +3695,7 @@ bool AbortCurrentMove(bot_t* pBot, const Vector NewDestination)
 		}
 		else
 		{
-			LadderMove(pBot, MoveFrom, MoveTo);
+			LadderMove(pBot, MoveFrom, MoveTo, pBot->BotNavInfo.CurrentPath[pBot->BotNavInfo.CurrentPathPoint].requiredZ);
 
 			// We're going DOWN the ladder
 			if (MoveFrom.z > MoveTo.z)
@@ -3922,40 +3956,42 @@ void DEBUG_DrawPath(const bot_path_node* Path, const int PathSize, const float D
 	for (int i = 1; i < PathSize; i++)
 	{
 		area = Path[i].area;
+		Vector ToDraw = Vector(Path[i].Location.x, Path[i].Location.y, Path[i].requiredZ);
+
 		if (area == SAMPLE_POLYAREA_GROUND)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime);
 		}
 		else if (area == SAMPLE_POLYAREA_CROUCH)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 255, 0, 0);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime, 255, 0, 0);
 		}
 		else if (area == SAMPLE_POLYAREA_JUMP || area == SAMPLE_POLYAREA_HIGHJUMP || area == SAMPLE_POLYAREA_BLOCKED)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 255, 255, 0);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime, 255, 255, 0);
 		}
 		else if (area == SAMPLE_POLYAREA_WALLCLIMB)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 0, 128, 0);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime, 0, 128, 0);
 		}
 		else if (area == SAMPLE_POLYAREA_LADDER)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 0, 0, 255);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime, 0, 0, 255);
 		}
 		else if (area == SAMPLE_POLYAREA_FALL || area == SAMPLE_POLYAREA_HIGHFALL)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 255, 0, 255);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime, 255, 0, 255);
 		}
 		else if (area == SAMPLE_POLYAREA_PHASEGATE)
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime, 64, 0, 0);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime, 64, 0, 0);
 		}
 		else
 		{
-			UTIL_DrawLine(clients[0], FromDraw, Path[i].Location, DrawTime);
+			UTIL_DrawLine(clients[0], FromDraw, ToDraw, DrawTime);
 		}
 
-		FromDraw = Path[i].Location;
+		FromDraw = ToDraw;
 
 	}
 
@@ -4711,7 +4747,7 @@ Vector UTIL_GetNearestLadderCentrePoint(edict_t* pEdict)
 	return pEdict->v.origin;
 }
 
-float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& ClimbEnd)
+float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& ClimbEnd, const int HullNum)
 {
 	TraceResult hit;
 
@@ -4730,7 +4766,7 @@ float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& Climb
 	Vector CurrTraceStart = StartTrace;
 
 	
-	UTIL_TraceHull(StartTrace, EndTrace, ignore_monsters, head_hull, nullptr, &hit);
+	UTIL_TraceHull(StartTrace, EndTrace, ignore_monsters, HullNum, nullptr, &hit);
 
 	if (hit.flFraction >= 1.0f && !hit.fStartSolid)
 	{
@@ -4745,7 +4781,7 @@ float UTIL_FindZHeightForWallClimb(const Vector& ClimbStart, const Vector& Climb
 		{
 			CurrTraceStart.z += 1.0f;
 			EndTrace.z = CurrTraceStart.z;
-			UTIL_TraceHull(CurrTraceStart, EndTrace, ignore_monsters, head_hull, nullptr, &hit);
+			UTIL_TraceHull(CurrTraceStart, EndTrace, ignore_monsters, HullNum, nullptr, &hit);
 			testCount++;
 		}
 

@@ -78,6 +78,8 @@ static const float item_inventory_refresh_rate = 0.1f;
 void UTIL_ClearMapAIData();
 // Clears out the MapLocations array
 void UTIL_ClearMapLocations();
+// Clear out all the hive information
+void UTIL_ClearHiveInfo();
 
 void PopulateEmptyHiveList();
 
@@ -121,7 +123,10 @@ const hive_definition* UTIL_GetNearestHiveOfStatus(const Vector SearchLocation, 
 
 
 // Get the nearest hive to the location which is fully built (not in progress)
-int UTIL_GetNearestBuiltHiveIndex(const Vector SearchLocation);
+const hive_definition* UTIL_GetNearestBuiltHiveToLocation(const Vector SearchLocation);
+
+// Taking phase gates into account, how far are the two points? Allows bots to intuit shortcuts using phase gates
+float UTIL_GetPhaseDistanceBetweenPoints(const Vector StartPoint, const Vector EndPoint);
 
 void SetNumberofHives(int NewValue);
 void SetHiveLocation(int HiveIndex, const Vector NewLocation);
@@ -174,10 +179,12 @@ int UTIL_FindNearestResNodeIndexToLocation(const Vector& Location);
 const resource_node* UTIL_FindEligibleResNodeClosestToLocation(const Vector& Location, const int Team, bool bIgnoreElectrified);
 const resource_node* UTIL_FindEligibleResNodeFurthestFromLocation(const Vector& Location, const int Team, bool bIgnoreElectrified);
 
+const resource_node* UTIL_MarineFindUnclaimedResNodeNearestLocation(const bot_t* pBot, const Vector& Location, float MinDist);
 const resource_node* UTIL_AlienFindUnclaimedResNodeFurthestFromLocation(const bot_t* pBot, const Vector& Location, bool bIgnoreElectrified);
 
 edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const NSStructureType StructureType);
 edict_t* UTIL_GetNearestStructureOfTypeInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius, bool bAllowElectrified);
+edict_t* UTIL_GetNearestUnbuiltStructureOfTypeInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius);
 bool UTIL_StructureOfTypeExistsInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius);
 
 edict_t* UTIL_GetAnyStructureOfTypeNearActiveHive(const NSStructureType StructureType, bool bAllowElectrical);
@@ -197,6 +204,7 @@ const hive_definition* UTIL_GetNearestHiveUnderSiege(const Vector SearchLocation
 bool UTIL_IsAnyHumanNearLocation(const Vector& Location, const float SearchDist);
 bool UTIL_IsAnyHumanNearLocationWithoutEquipment(const Vector& Location, const float SearchDist);
 bool UTIL_IsAnyHumanNearLocationWithoutSpecialWeapon(const Vector& Location, const float SearchDist);
+bool UTIL_IsAnyHumanNearLocationWithoutWeapon(const NSWeapon WeaponType, const Vector& Location, const float SearchDist);
 edict_t* UTIL_GetNearestHumanAtLocation(const Vector& Location, const float SearchDist);
 
 edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructureType StructureType, const float SearchDist, bool bFullyConstructedOnly);
@@ -211,6 +219,7 @@ bool UTIL_AnyPlayerOnTeamWithLOS(const Vector& Location, const int Team, float S
 edict_t* UTIL_GetClosestPlayerOnTeamWithLOS(const Vector& Location, const int Team, float SearchRadius);
 
 edict_t* UTIL_FindClosestMarineStructureUnbuilt(const Vector& SearchLocation, float SearchRadius);
+edict_t* UTIL_FindClosestMarineStructureOfTypeUnbuilt(const NSStructureType StructureType, const Vector& SearchLocation, float SearchRadius);
 edict_t* UTIL_FindClosestDamagedStructure(const Vector& SearchLocation, const int Team, float SearchRadius);
 edict_t* UTIL_FindMarineWithDamagedArmour(const Vector& SearchLocation, float SearchRadius, edict_t* IgnoreEdict);
 
@@ -277,5 +286,9 @@ int UTIL_GetNumEquipmentInPlay();
 
 // Should the commander use distress beacon? Determines if the base is being overwhelmed by aliens
 bool UTIL_BaseIsInDistress();
+
+// Returns true if the marines have completed this research. NOTE: This will return false if the research is complete but the building is missing
+// e.g. phase tech will return false if there are no completed observatories even if the tech itself was previously researched
+bool UTIL_ResearchIsComplete(const NSResearch Research);
 
 #endif

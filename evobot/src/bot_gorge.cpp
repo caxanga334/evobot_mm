@@ -107,7 +107,7 @@ void GorgeCombatThink(bot_t* pBot)
 		}
 		else
 		{
-			AlienGuardLocation(pBot, pBot->pEdict->v.origin);
+			BotGuardLocation(pBot, pBot->pEdict->v.origin);
 		}
 	}
 	else
@@ -121,7 +121,7 @@ void GorgeCombatThink(bot_t* pBot)
 
 			if (NearestHive)
 			{
-				if (vDist2DSq(pBot->pEdict->v.origin, NearestHive->FloorLocation) > UTIL_MetresToGoldSrcUnits(5.0f))
+				if (vDist2DSq(pBot->pEdict->v.origin, NearestHive->FloorLocation) > sqrf(UTIL_MetresToGoldSrcUnits(5.0f)))
 				{
 					MoveTo(pBot, NearestHive->FloorLocation, MOVESTYLE_HIDE);
 				}

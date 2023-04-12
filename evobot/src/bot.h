@@ -306,6 +306,8 @@ void BotNotifyStructureDestroyed(bot_t* pBot, const NSStructureType Structure, c
 
 bot_task* BotGetNextTask(bot_t* pBot);
 
+void BotGuardLocation(bot_t* pBot, const Vector GuardLocation);
+
 void BotOnCompletePrimaryTask(bot_t* pBot, bot_task* Task);
 
 BotRole AlienGetBestBotRole(const bot_t* pBot);
@@ -519,8 +521,6 @@ bool UTIL_IsMeleeWeapon(const NSWeapon Weapon);
 
 Vector UTIL_GetGrenadeThrowTarget(bot_t* pBot, const Vector TargetLocation, const float ExplosionRadius);
 
-void AlienGuardLocation(bot_t* pBot, const Vector Location);
-
 void AlienCheckWantsAndNeeds(bot_t* pBot);
 
 void OnBotFinishGuardingLocation(bot_t* pBot);
@@ -583,6 +583,7 @@ void BotReceiveWeldOrder(bot_t* pBot, AvHUser3 TargetType, Vector destination);
 
 // Returns the collision hull index used by the player, based on their class and whether they're crouching or not
 int GetPlayerHullIndex(const edict_t* pEdict);
+int GetPlayerHullIndex(const edict_t* pEdict, const bool bIsCrouching);
 
 // Returns the player's radius in units, based on their current collision hull
 float UTIL_GetPlayerRadius(const edict_t* pEdict);

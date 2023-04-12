@@ -36,6 +36,8 @@ void DroneThink(bot_t* pBot);
 void TestNavThink(bot_t* pBot);
 // Called by BotThink if the debug mode is "testnav"
 void TestAimThink(bot_t* pBot);
+// Called by BotThink if the debug mode is "testguard"
+void TestGuardThink(bot_t* pBot);
 // Caps bot sync speed to avoid them running too slowly or too fast
 byte ThrottledMsec(bot_t *pBot);
 

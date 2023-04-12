@@ -350,6 +350,20 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
+	if (FStrEq(pcmd, "whichhivetest"))
+	{
+		PopulateEmptyHiveList();
+
+		for (int i = 0; i < NumTotalHives; i++)
+		{
+				char buf[32];
+				sprintf(buf, "%d\n", Hives[i].edict->v.rendermode);
+				UTIL_SayText(buf, pEntity);
+		}
+
+		RETURN_META(MRES_SUPERCEDE);
+	}
+
 	if (FStrEq(pcmd, "testattack"))
 	{
 		if (!NavmeshLoaded())
@@ -453,13 +467,16 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "getgroundloc"))
+	if (FStrEq(pcmd, "cloakmode"))
 	{
-		Vector GroundLoc = UTIL_GetEntityGroundLocation(pEntity);
-
-		if (GroundLoc != ZERO_VECTOR)
+		for (int i = 0; i < gpGlobals->maxClients; i++)
 		{
-			UTIL_DrawLine(pEntity, GroundLoc, GroundLoc + Vector(0.0f, 0.0f, 50.0f), 5.0f);
+			if (bots[i].is_used)  // not respawning
+			{
+				char buf[32];
+				sprintf(buf, "%d\n", bots[i].pEdict->v.rendermode);
+				UTIL_SayText(buf, pEntity);
+			}
 		}
 
 		RETURN_META(MRES_SUPERCEDE);
@@ -1411,6 +1428,9 @@ void StartFrame(void)
 								case EVO_DEBUG_AIM:
 									TestAimThink(bot);
 									break;
+								case EVO_DEBUG_GUARD:
+									TestGuardThink(bot);
+									break;
 								default:
 									BotThink(bot);
 									break;
@@ -1746,6 +1766,20 @@ void EvoBot_ServerCommand(void)
 		if (FStrEq(DebugMode, "aim"))
 		{
 			CurrentDebugMode = EVO_DEBUG_AIM;
+
+			for (int i = 0; i < 32; i++)
+			{
+				UTIL_ClearBotTask(&bots[i], &bots[i].PrimaryBotTask);
+				UTIL_ClearBotTask(&bots[i], &bots[i].SecondaryBotTask);
+				UTIL_ClearBotTask(&bots[i], &bots[i].WantsAndNeedsTask);
+			}
+
+			return;
+		}
+
+		if (FStrEq(DebugMode, "guard"))
+		{
+			CurrentDebugMode = EVO_DEBUG_GUARD;
 
 			for (int i = 0; i < 32; i++)
 			{

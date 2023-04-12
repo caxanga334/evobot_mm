@@ -22,7 +22,8 @@ constexpr auto MAX_PRIORITY_ACTIONS = 20; // How many actions at each priority l
 
 
 
-// Bot's role on the team.
+// Bot's role on the team. For marines, this only governs what they do when left to their own devices.
+// Marine bots will always listen to orders from the commander regardless of role.
 enum BotRole
 {
 	BOT_ROLE_NONE,
@@ -32,6 +33,7 @@ enum BotRole
 	BOT_ROLE_COMMAND,		 // Will attempt to take command
 	BOT_ROLE_FIND_RESOURCES, // Will hunt for uncapped resource nodes and cap them. Will attack enemy resource towers
 	BOT_ROLE_GUARD_BASE,	 // Will stay behind in the base and guard/build stuff
+	BOT_ROLE_ASSAULT,		 // Will go to attack the hive
 
 	// Alien roles
 
@@ -55,7 +57,8 @@ typedef enum _EVODEBUGMODE
 	EVO_DEBUG_NONE = 0, // Bot plays game normally
 	EVO_DEBUG_TESTNAV, // Bot randomly navigates between resource nodes and comm chair, will not enagage enemies
 	EVO_DEBUG_DRONE, // Bot does nothing unless given task by player, will not engage enemies unless given attack order
-	EVO_DEBUG_AIM // Bot just aims at an enemy and indicates where it's aiming and whether it would fire or hit
+	EVO_DEBUG_AIM, // Bot just aims at an enemy and indicates where it's aiming and whether it would fire or hit
+	EVO_DEBUG_GUARD // Bot just guards random areas to test guard behaviour
 } EvobotDebugMode;
 
 // Type of goal the commander wants to achieve
@@ -99,6 +102,7 @@ typedef enum
 	TASK_RESUPPLY,
 	TASK_EVOLVE,
 	TASK_GRENADE,
+	TASK_COMMAND
 }
 BotTaskType;
 
@@ -247,7 +251,7 @@ typedef struct _BOT_TASK
 	float LastBuildAttemptTime = 0.0f; // When did the Gorge last try to place a structure?
 	int BuildAttempts = 0; // How many attempts the Gorge has tried to place it, so it doesn't keep trying forever
 	int Evolution = 0; // Used by TASK_EVOLVE to determine what to evolve into
-
+	float TaskLength = 0.0f; // If a task has gone on longer than this time, it will be considered completed
 } bot_task;
 
 
@@ -272,6 +276,18 @@ typedef struct _BOT_SKILL
 	float bot_view_speed = 0.5f; // How fast a bot can spin its view to aim in a given direction
 
 } bot_skill;
+
+typedef struct _BOT_GUARD_INFO
+{
+	Vector GuardLocation = ZERO_VECTOR; // What position are we guarding?
+	Vector GuardStandPosition = ZERO_VECTOR; // Where the bot should stand to guard position (moves around a bit)
+	Vector GuardPoints[8]; // All potential areas to watch that an enemy could approach from
+	int NumGuardPoints = 0; // How many watch areas there are for the current location
+	Vector GuardLookLocation = ZERO_VECTOR; // Which area are we currently watching?
+	float GuardStartLookTime = 0.0f; // When did we start watching the current area?
+	float ThisGuardLookTime = 0.0f; // How long should we watch this area for?
+
+} bot_guard_info;
 
 // Bot data structure. Holds all things a growing bot needs
 typedef struct _BOT_T
@@ -359,15 +375,7 @@ typedef struct _BOT_T
 
 	// All of the below is for guarding an area. This needs reworking to be honest.
 
-	Vector CurrentGuardLocation = ZERO_VECTOR;
-	Vector GuardPoints[8];
-	Vector GuardLookLocation = ZERO_VECTOR;
-	int NumGuardPoints = 0;
-	float GuardStartLookTime = 0.0f;
-	float ThisGuardLookTime = 0.0f;
-	// How long to spend guarding the current area
-	float GuardLengthTime = 0.0f;
-	float GuardStartedTime = 0.0f;
+	bot_guard_info GuardInfo;
 
 	float AimingDelay = 0.1f; // How frequently should the bot adjust its view and react to moving targets?
 

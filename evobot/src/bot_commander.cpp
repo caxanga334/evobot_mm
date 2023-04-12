@@ -1092,29 +1092,14 @@ void CommanderThink(bot_t* pBot)
 {
 	if (!bGameIsActive) { return; }
 
-	//fprintf(pBot->logFile, "\nCommander think 1\n");
-	//fflush(pBot->logFile);
-
 	UTIL_OrganiseCommanderActions(pBot);
-
-	//fprintf(pBot->logFile, "Commander think 2\n");
-	//fflush(pBot->logFile);
 
 	UpdateCommanderOrders(pBot);
 
-	//fprintf(pBot->logFile, "Commander think 3\n");
-	//fflush(pBot->logFile);
-
 	CommanderQueueNextAction(pBot);
-
-	//fprintf(pBot->logFile, "Commander think 4\n");
-	//fflush(pBot->logFile);
 
 	UpdateCommanderActions(pBot);
 
-	//fprintf(pBot->logFile, "Commander think 5\n");
-	//fflush(pBot->logFile);
-	
 }
 
 bool UTIL_IsMarineOrderValid(bot_t* CommanderBot, int CommanderOrderIndex)
@@ -2554,13 +2539,13 @@ void CommanderQueueNextAction(bot_t* pBot)
 	{
 		//fprintf(pBot->logFile, "Commander Queue Action 23.1\n");
 		//fflush(pBot->logFile);
-		int BuiltHiveIndex = UTIL_GetNearestBuiltHiveIndex(UTIL_GetCommChairLocation());
+		const hive_definition* NearestBuildHive = UTIL_GetNearestBuiltHiveToLocation(UTIL_GetCommChairLocation());
 
-		if (BuiltHiveIndex > -1)
+		if (NearestBuildHive)
 		{
 			//fprintf(pBot->logFile, "Commander Queue Action 23.2\n");
 			//fflush(pBot->logFile);
-			QueueSiegeHiveAction(pBot, Hives[BuiltHiveIndex].FloorLocation, CurrentPriority);
+			QueueSiegeHiveAction(pBot, NearestBuildHive->FloorLocation, CurrentPriority);
 			//fprintf(pBot->logFile, "Commander Queue Action 23.3\n");
 			//fflush(pBot->logFile);
 		}
@@ -2628,112 +2613,6 @@ int UTIL_FindFreeResNodeWithMarineNearby(bot_t* CommanderBot)
 	}
 
 	return -1;
-}
-
-bool UTIL_ResearchIsComplete(const NSResearch Research)
-{
-	bool bIsComplete = false;
-
-	switch (Research)
-	{
-		case RESEARCH_ARMOURY_GRENADES:
-		{
-			AvHUpgradeMask Mask = UTIL_GetResearchMask(Research);
-
-			for (auto& it : MarineBuildableStructureMap)
-			{
-				if (!it.second.bOnNavmesh) { continue; }
-				if (!UTIL_StructureTypesMatch(it.second.StructureType, STRUCTURE_MARINE_ANYARMOURY)) { continue; }
-				if (UTIL_StructureIsRecycling(it.first)) { continue; }
-				if (!it.second.bFullyConstructed) { continue; }
-				
-				if (!(it.first->v.iuser4 & Mask) && (!UTIL_StructureIsResearching(it.first) || it.first->v.iuser2 != Research))
-				{
-					return true;
-				}
-
-			}
-
-			return false;
-		}
-		break;
-		case RESEARCH_ARMSLAB_ARMOUR1:
-		case RESEARCH_ARMSLAB_ARMOUR2:
-		case RESEARCH_ARMSLAB_ARMOUR3:
-		case RESEARCH_ARMSLAB_WEAPONS1:
-		case RESEARCH_ARMSLAB_WEAPONS2:
-		case RESEARCH_ARMSLAB_WEAPONS3:
-		case RESEARCH_ARMSLAB_CATALYSTS:
-		{
-			AvHUpgradeMask Mask = UTIL_GetResearchMask(Research);
-
-			for (auto& it : MarineBuildableStructureMap)
-			{
-				if (!it.second.bOnNavmesh) { continue; }
-				if (!UTIL_StructureTypesMatch(it.second.StructureType, STRUCTURE_MARINE_ARMSLAB)) { continue; }
-				if (UTIL_StructureIsRecycling(it.first)) { continue; }
-				if (!it.second.bFullyConstructed) { continue; }
-
-				if (!(it.first->v.iuser4 & Mask) && (!UTIL_StructureIsResearching(it.first) || it.first->v.iuser2 != Research))
-				{
-					return true;
-				}
-
-			}
-
-			return false;
-		}
-		break;
-		case RESEARCH_OBSERVATORY_DISTRESSBEACON:
-		case RESEARCH_OBSERVATORY_MOTIONTRACKING:
-		case RESEARCH_OBSERVATORY_PHASETECH:
-		{
-			AvHUpgradeMask Mask = UTIL_GetResearchMask(Research);
-
-			for (auto& it : MarineBuildableStructureMap)
-			{
-				if (!it.second.bOnNavmesh) { continue; }
-				if (!UTIL_StructureTypesMatch(it.second.StructureType, STRUCTURE_MARINE_OBSERVATORY)) { continue; }
-				if (UTIL_StructureIsRecycling(it.first)) { continue; }
-				if (!it.second.bFullyConstructed) { continue; }
-
-				if (!(it.first->v.iuser4 & Mask) && (!UTIL_StructureIsResearching(it.first) || it.first->v.iuser2 != Research))
-				{
-					return true;
-				}
-
-			}
-
-			return false;
-		}
-		break;
-		case RESEARCH_PROTOTYPELAB_HEAVYARMOUR:
-		case RESEARCH_PROTOTYPELAB_JETPACKS:
-		{
-			AvHUpgradeMask Mask = UTIL_GetResearchMask(Research);
-
-			for (auto& it : MarineBuildableStructureMap)
-			{
-				if (!it.second.bOnNavmesh) { continue; }
-				if (!UTIL_StructureTypesMatch(it.second.StructureType, STRUCTURE_MARINE_PROTOTYPELAB)) { continue; }
-				if (UTIL_StructureIsRecycling(it.first)) { continue; }
-				if (!it.second.bFullyConstructed) { continue; }
-
-				if (!(it.first->v.iuser4 & Mask) && (!UTIL_StructureIsResearching(it.first) || it.first->v.iuser2 != Research))
-				{
-					return true;
-				}
-
-			}
-
-			return false;
-		}
-		break;
-		default:
-			return false;
-	}
-
-	return false;
 }
 
 commander_action* UTIL_FindCommanderBuildActionOfType(bot_t* pBot, const NSStructureType StructureType, const Vector SearchLocation, const float SearchRadius)

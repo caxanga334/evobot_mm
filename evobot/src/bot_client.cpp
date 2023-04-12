@@ -649,7 +649,10 @@ void BotClient_NS_SetupMap(void* p, int bot_index)
 	{
 		if (!IsLocation)
 		{
-			bots[bot_index].map_max_extent = *(float*)p;
+			if (bot_index > 0)
+			{
+				bots[bot_index].map_max_extent = *(float*)p;
+			}
 		}
 		else
 		{
