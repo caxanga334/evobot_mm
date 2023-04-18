@@ -127,7 +127,7 @@ void MarineAssaultSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		{
 			float Dist = vDist2D(pBot->pEdict->v.origin, Phasegate->v.origin) - 1.0f;
 
-			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(Phasegate->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(Phasegate->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 			if (NumMarinesNearby < 1)
 			{
@@ -145,7 +145,7 @@ void MarineAssaultSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		{
 			float Dist = vDist2D(pBot->pEdict->v.origin, TurretFactory->v.origin) - 1.0f;
 
-			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(TurretFactory->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(TurretFactory->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 			if (NumMarinesNearby < 1)
 			{
@@ -163,7 +163,7 @@ void MarineAssaultSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		{
 			float Dist = vDist2D(pBot->pEdict->v.origin, SiegeTurret->v.origin) - 1.0f;
 
-			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(SiegeTurret->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(SiegeTurret->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 			if (NumMarinesNearby < 1)
 			{
@@ -181,7 +181,7 @@ void MarineAssaultSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		{
 			float Dist = vDist2D(pBot->pEdict->v.origin, Armoury->v.origin) - 1.0f;
 
-			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(Armoury->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+			int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(Armoury->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 			if (NumMarinesNearby < 1)
 			{
@@ -335,7 +335,7 @@ void MarineCapperSetSecondaryTask(bot_t* pBot, bot_task* Task)
 	{
 		float Dist = vDist2D(pBot->pEdict->v.origin, UnbuiltStructure->v.origin) - 1.0f;
 
-		int NumBuilders = UTIL_GetNumPlayersOfTeamInArea(UnbuiltStructure->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+		int NumBuilders = UTIL_GetNumPlayersOfTeamInArea(UnbuiltStructure->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 		if (NumBuilders < 1)
 		{
@@ -389,13 +389,15 @@ void MarineCapperSetSecondaryTask(bot_t* pBot, bot_task* Task)
 
 void MarineAssaultSetSecondaryTask(bot_t* pBot, bot_task* Task)
 {
+
+
 	edict_t* UnbuiltStructure = UTIL_FindClosestMarineStructureUnbuilt(pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(10.0f));
 
 	if (!FNullEnt(UnbuiltStructure))
 	{
 		float Dist = vDist2D(pBot->pEdict->v.origin, UnbuiltStructure->v.origin) - 1.0f;
 
-		int NumBuilders = UTIL_GetNumPlayersOfTeamInArea(UnbuiltStructure->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+		int NumBuilders = UTIL_GetNumPlayersOfTeamInArea(UnbuiltStructure->v.origin, Dist, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 		if (NumBuilders < 1)
 		{
@@ -404,7 +406,18 @@ void MarineAssaultSetSecondaryTask(bot_t* pBot, bot_task* Task)
 			Task->bOrderIsUrgent = true;
 			return;
 		}
-	}	
+	}
+
+	edict_t* EnemyOffenceChamber = BotGetNearestDangerTurret(pBot, UTIL_MetresToGoldSrcUnits(15.0f));
+
+	if (!FNullEnt(EnemyOffenceChamber))
+	{
+		Task->TaskType = TASK_ATTACK;
+		Task->TaskTarget = EnemyOffenceChamber;
+		Task->TaskLocation = EnemyOffenceChamber->v.origin;
+		Task->bOrderIsUrgent = false;
+		return;
+	}
 
 	edict_t* AttackedPhaseGate = UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(pBot, STRUCTURE_MARINE_PHASEGATE);
 
@@ -500,7 +513,7 @@ void MarineAssaultSetSecondaryTask(bot_t* pBot, bot_task* Task)
 		// Assault won't defend structures unless they're close by, so they don't get too distracted from their attacking duties
 		if (DistToStructure < UTIL_MetresToGoldSrcUnits(10.0f))
 		{
-			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(ResourceTower->v.origin, DistToStructure, MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(ResourceTower->v.origin, DistToStructure, MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 			if (NumPotentialDefenders < 1)
 			{
@@ -1006,7 +1019,7 @@ NSWeapon BotAlienChooseBestWeaponForStructure(bot_t* pBot, edict_t* target)
 
 	if (BotHasWeapon(pBot, WEAPON_SKULK_XENOCIDE))
 	{
-		int NumTargetsInArea = UTIL_GetNumPlayersOfTeamInArea(target->v.origin, UTIL_MetresToGoldSrcUnits(5.0f), MARINE_TEAM, NULL, CLASS_NONE);
+		int NumTargetsInArea = UTIL_GetNumPlayersOfTeamInArea(target->v.origin, UTIL_MetresToGoldSrcUnits(5.0f), MARINE_TEAM, NULL, CLASS_NONE, false);
 
 		NumTargetsInArea += UTIL_GetNumPlacedStructuresOfTypeInRadius(STRUCTURE_MARINE_ANYTURRET, target->v.origin, UTIL_MetresToGoldSrcUnits(5.0f));
 
@@ -1115,7 +1128,7 @@ void MarineCheckWantsAndNeeds(bot_t* pBot)
 			return;
 		}
 
-		edict_t* NearestArmoury = UTIL_GetNearestStructureIndexOfType(pEdict->v.origin, STRUCTURE_MARINE_ANYARMOURY, UTIL_MetresToGoldSrcUnits(100.0f), true);
+		edict_t* NearestArmoury = UTIL_GetNearestStructureIndexOfType(pEdict->v.origin, STRUCTURE_MARINE_ANYARMOURY, UTIL_MetresToGoldSrcUnits(100.0f), true, IsPlayerMarine(pBot->pEdict));
 
 		if (!FNullEnt(NearestArmoury))
 		{
@@ -1137,7 +1150,7 @@ void MarineCheckWantsAndNeeds(bot_t* pBot)
 	{
 		if (pBot->WantsAndNeedsTask.TaskType != TASK_GET_WEAPON)
 		{
-			const dropped_marine_item* NewWeaponIndex = UTIL_GetNearestSpecialPrimaryWeapon(pEdict->v.origin, UTIL_MetresToGoldSrcUnits(15.0f));
+			const dropped_marine_item* NewWeaponIndex = UTIL_GetNearestSpecialPrimaryWeapon(pEdict->v.origin, UTIL_MetresToGoldSrcUnits(15.0f), true);
 
 			if (NewWeaponIndex)
 			{
@@ -1180,7 +1193,7 @@ void MarineCheckWantsAndNeeds(bot_t* pBot)
 
 		float DistanceWillingToTravel = (BotGetPrimaryWeaponAmmoReserve(pBot) == 0) ? UTIL_MetresToGoldSrcUnits(50.0f) : UTIL_MetresToGoldSrcUnits(15.0f);
 
-		edict_t* NearestArmoury = UTIL_GetNearestStructureIndexOfType(pEdict->v.origin, STRUCTURE_MARINE_ANYARMOURY, UTIL_MetresToGoldSrcUnits(100.0f), true);
+		edict_t* NearestArmoury = UTIL_GetNearestStructureIndexOfType(pEdict->v.origin, STRUCTURE_MARINE_ANYARMOURY, UTIL_MetresToGoldSrcUnits(100.0f), true, IsPlayerMarine(pBot->pEdict));
 
 		if (!FNullEnt(NearestArmoury))
 		{
@@ -1228,7 +1241,7 @@ void MarineCheckWantsAndNeeds(bot_t* pBot)
 	{
 		if (pBot->WantsAndNeedsTask.TaskType != TASK_GET_EQUIPMENT)
 		{
-			const dropped_marine_item* EquipmentIndex = UTIL_GetNearestEquipment(pEdict->v.origin, UTIL_MetresToGoldSrcUnits(15.0f));
+			const dropped_marine_item* EquipmentIndex = UTIL_GetNearestEquipment(pEdict->v.origin, UTIL_MetresToGoldSrcUnits(15.0f), true);
 
 			if (EquipmentIndex)
 			{
@@ -1437,7 +1450,7 @@ bool UTIL_IsMarineCapResNodeTaskStillValid(bot_t* pBot, bot_task* Task)
 	// Always obey commander orders even if there's a bunch of other marines already there
 	if (!Task->bIssuedByCommander)
 	{
-		int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(Task->TaskLocation, UTIL_MetresToGoldSrcUnits(4.0f), MARINE_TEAM, pBot->pEdict, CLASS_MARINE_COMMANDER);
+		int NumMarinesNearby = UTIL_GetNumPlayersOfTeamInArea(Task->TaskLocation, UTIL_MetresToGoldSrcUnits(4.0f), MARINE_TEAM, pBot->pEdict, CLASS_MARINE_COMMANDER, false);
 
 		if (NumMarinesNearby >= 2 && vDist2DSq(pBot->pEdict->v.origin, Task->TaskLocation) > sqrf(UTIL_MetresToGoldSrcUnits(4.0f))) { return false; }
 	}

@@ -303,7 +303,7 @@ void HandlePlayerAvoidance(bot_t* pBot, const Vector MoveDestination);
 dtStatus FindPathToPoint(const int NavProfileIndex, const Vector& FromLocation, const Vector& ToLocation, bot_path_node* path, int* pathSize, bool bAllowPartial);
 
 // Special path finding that takes the presence of phase gates into account 
-dtStatus FindPhaseGatePathToPoint(bot_t* pBot, Vector FromLocation, Vector ToLocation, bot_path_node* path, int* pathSize, bool bAllowPartial);
+dtStatus FindPhaseGatePathToPoint(const int NavProfileIndex, Vector FromLocation, Vector ToLocation, bot_path_node* path, int* pathSize, float MaxAcceptableDistance);
 
 // Similar to FindPathToPoint, but you can specify a max acceptable distance for partial results. Will return a failure if it can't reach at least MaxAcceptableDistance away from the ToLocation
 dtStatus FindPathClosestToPoint(bot_t* pBot, const BotMoveStyle MoveStyle, const Vector& FromLocation, const Vector& ToLocation, bot_path_node* path, int* pathSize, float MaxAcceptableDistance);
@@ -311,6 +311,8 @@ dtStatus FindPathClosestToPoint(const int NavProfileIndex, const Vector& FromLoc
 
 // If the bot is stuck and off the path or nav mesh, this will try to find a point it can directly move towards to get it back on track
 Vector FindClosestPointBackOnPath(bot_t* pBot);
+
+Vector FindClosestNavigablePointToDestination(const int NavProfileIndex, const Vector& FromLocation, const Vector& ToLocation, float MaxAcceptableDistance);
 
 // Will attempt to move directly towards MoveDestination while jumping/ducking as needed, and avoiding obstacles in the way
 void PerformUnstuckMove(bot_t* pBot, const Vector MoveDestination);
@@ -339,6 +341,8 @@ bool UTIL_PointIsDirectlyReachable(const bot_t* pBot, const Vector& start, const
 bool UTIL_PointIsDirectlyReachable(const Vector& start, const Vector& target);
 bool UTIL_PointIsDirectlyReachable(const int NavProfileIndex, const Vector& start, const Vector& target);
 
+// Will trace along the nav mesh from start to target and return true if the trace reaches within MaxAcceptableDistance
+bool UTIL_TraceNav(const int NavProfileIndex, const Vector start, const Vector target, const float MaxAcceptableDistance);
 
 /*
 	Project point to navmesh:

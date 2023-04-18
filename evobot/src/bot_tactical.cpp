@@ -26,6 +26,8 @@ int NumTotalHives;
 map_location MapLocations[64];
 int NumMapLocations;
 
+float CommanderViewZHeight;
+
 
 extern edict_t* clients[32];
 
@@ -59,7 +61,7 @@ void PopulateEmptyHiveList()
 	}
 }
 
-const dropped_marine_item* UTIL_GetNearestEquipment(const Vector Location, const float SearchDist)
+const dropped_marine_item* UTIL_GetNearestEquipment(const Vector Location, const float SearchDist, bool bUsePhaseDist)
 {
 	float SearchDistSq = sqrf(SearchDist);
 	int Result = -1;
@@ -71,7 +73,7 @@ const dropped_marine_item* UTIL_GetNearestEquipment(const Vector Location, const
 
 		if (AllMarineItems[i].ItemType != ITEM_MARINE_JETPACK && AllMarineItems[i].ItemType != ITEM_MARINE_HEAVYARMOUR) { continue; }
 
-		float DistSq = vDist2DSq(AllMarineItems[i].Location, Location);
+		float DistSq = (bUsePhaseDist) ? UTIL_GetPhaseDistanceBetweenPointsSq(AllMarineItems[i].Location, Location) : vDist2DSq(AllMarineItems[i].Location, Location);
 
 		if (DistSq < SearchDistSq && (Result < 0 || DistSq < MinDist))
 		{
@@ -357,7 +359,7 @@ const dropped_marine_item* UTIL_GetNearestItemIndexOfType(const NSDeployableItem
 	return nullptr;
 }
 
-const dropped_marine_item* UTIL_GetNearestSpecialPrimaryWeapon(const Vector Location, const float SearchDist)
+const dropped_marine_item* UTIL_GetNearestSpecialPrimaryWeapon(const Vector Location, const float SearchDist, bool bUsePhaseDist)
 {
 	float SearchDistSq = sqrf(SearchDist);
 	int Result = -1;
@@ -369,7 +371,7 @@ const dropped_marine_item* UTIL_GetNearestSpecialPrimaryWeapon(const Vector Loca
 
 		if (AllMarineItems[i].ItemType != ITEM_MARINE_HMG && AllMarineItems[i].ItemType != ITEM_MARINE_SHOTGUN && AllMarineItems[i].ItemType != ITEM_MARINE_GRENADELAUNCHER) { continue; }
 
-		float DistSq = vDist2DSq(AllMarineItems[i].Location, Location);
+		float DistSq = (bUsePhaseDist) ? UTIL_GetPhaseDistanceBetweenPointsSq(AllMarineItems[i].Location, Location) : vDist2DSq(AllMarineItems[i].Location, Location);
 
 		if (DistSq < SearchDistSq && (Result < 0 || DistSq < MinDist))
 		{
@@ -426,6 +428,16 @@ char* UTIL_GetClosestMapLocationToPoint(const Vector Point)
 	{
 		return "";
 	}
+}
+
+void SetCommanderViewZHeight(float NewValue)
+{
+	CommanderViewZHeight = NewValue;
+}
+
+float GetCommanderViewZHeight()
+{
+	return CommanderViewZHeight;
 }
 
 void AddMapLocation(const char* LocationName, Vector MinLocation, Vector MaxLocation)
@@ -1008,7 +1020,7 @@ edict_t* UTIL_GetNearestPlayerOfTeamInArea(const Vector Location, const float Se
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (!FNullEnt(clients[i]) && clients[i] != IgnorePlayer && !IsPlayerDead(clients[i]) && !IsPlayerBeingDigested(clients[i]) && clients[i]->v.team == Team && UTIL_GetPlayerClass(clients[i]) != IgnoreClass)
+		if (!FNullEnt(clients[i]) && clients[i] != IgnorePlayer && clients[i]->v.team == Team && UTIL_GetPlayerClass(clients[i]) != IgnoreClass && IsPlayerActiveInGame(clients[i]))
 		{
 			float ThisDist = vDist2DSq(clients[i]->v.origin, Location);
 
@@ -1023,7 +1035,7 @@ edict_t* UTIL_GetNearestPlayerOfTeamInArea(const Vector Location, const float Se
 	return Result;
 }
 
-int UTIL_GetNumPlayersOfTeamInArea(const Vector Location, const float SearchRadius, const int Team, edict_t* IgnorePlayer, NSPlayerClass IgnoreClass)
+int UTIL_GetNumPlayersOfTeamInArea(const Vector Location, const float SearchRadius, const int Team, edict_t* IgnorePlayer, NSPlayerClass IgnoreClass, bool bUsePhaseDist)
 {
 	int Result = 0;
 	float CheckDist = sqrf(SearchRadius);
@@ -1033,7 +1045,7 @@ int UTIL_GetNumPlayersOfTeamInArea(const Vector Location, const float SearchRadi
 	{
 		if (!FNullEnt(clients[i]) && clients[i] != IgnorePlayer && clients[i]->v.team == Team && UTIL_GetPlayerClass(clients[i]) != IgnoreClass && IsPlayerActiveInGame(clients[i]))
 		{
-			float ThisDist = vDist2DSq(clients[i]->v.origin, Location);
+			float ThisDist = (bUsePhaseDist) ? UTIL_GetPhaseDistanceBetweenPointsSq(clients[i]->v.origin, Location) : vDist2DSq(clients[i]->v.origin, Location);
 
 			if (ThisDist < CheckDist)
 			{
@@ -1141,6 +1153,31 @@ edict_t* UTIL_GetAnyStructureOfTypeNearUnbuiltHive(const NSStructureType Structu
 			{
 				return ThreateningPhaseGate;
 			}
+		}
+	}
+
+	return nullptr;
+}
+
+edict_t* UTIL_GetFirstPlacedStructureOfType(const NSStructureType StructureType)
+{
+	bool bIsMarineStructure = UTIL_IsMarineStructure(StructureType);
+
+	if (bIsMarineStructure)
+	{
+		for (auto& it : MarineBuildableStructureMap)
+		{
+			if (!it.second.bOnNavmesh) { continue; }
+			if (UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { return it.first; }
+		}
+	}
+	else
+	{
+		for (auto& it : AlienBuildableStructureMap)
+		{
+			if (!it.second.bOnNavmesh) { continue; }
+			if (UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { return it.first; }
+			
 		}
 	}
 
@@ -1552,6 +1589,7 @@ void UTIL_ClearMapLocations()
 {
 	memset(MapLocations, 0, sizeof(MapLocations));
 	NumMapLocations = 0;
+	CommanderViewZHeight = 0.0f;
 }
 
 void UTIL_ClearHiveInfo()
@@ -1699,7 +1737,7 @@ const resource_node* UTIL_MarineFindUnclaimedResNodeNearestLocation(const bot_t*
 	{
 		if (ResourceNodes[i].bIsOccupied) { continue; }
 
-		float Dist = vDist2DSq(Location, ResourceNodes[i].origin);
+		float Dist = UTIL_GetPhaseDistanceBetweenPointsSq(Location, ResourceNodes[i].origin);
 
 		if (Dist < MinDistSq) { continue; }
 
@@ -1722,7 +1760,7 @@ const resource_node* UTIL_MarineFindUnclaimedResNodeNearestLocation(const bot_t*
 			continue;
 		}
 
-		int NumOtherMarines = UTIL_GetNumPlayersOfTeamInArea(ResourceNodes[i].origin, UTIL_MetresToGoldSrcUnits(5.0f), MARINE_TEAM, pBot->pEdict, CLASS_NONE);
+		int NumOtherMarines = UTIL_GetNumPlayersOfTeamInArea(ResourceNodes[i].origin, UTIL_MetresToGoldSrcUnits(5.0f), MARINE_TEAM, pBot->pEdict, CLASS_NONE, false);
 
 		if (NumOtherMarines >= 2)
 		{
@@ -1809,17 +1847,19 @@ edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const 
 	edict_t* Result = nullptr;
 	float MinDist = 0.0f;
 
+	bool bIsMarine = IsPlayerMarine(pBot->pEdict);
+
 	if (StructureType == STRUCTURE_ALIEN_HIVE)
 	{
 		for (int i = 0; i < NumTotalHives; i++)
 		{
 			if (!Hives[i].bIsValid || Hives[i].Status == HIVE_STATUS_UNBUILT || !Hives[i].bIsUnderAttack) { continue; }
 
-			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(Hives[i].FloorLocation, UTIL_MetresToGoldSrcUnits(15.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE);
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(Hives[i].FloorLocation, UTIL_MetresToGoldSrcUnits(15.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE, false);
 
 			if (NumPotentialDefenders >= 3) { continue; }
 
-			float ThisDist = vDist2DSq(Hives[i].FloorLocation, pBot->pEdict->v.origin);
+			float ThisDist = (bIsMarine) ? UTIL_GetPhaseDistanceBetweenPointsSq(Hives[i].FloorLocation, pBot->pEdict->v.origin) : vDist2DSq(Hives[i].FloorLocation, pBot->pEdict->v.origin);
 
 			if (FNullEnt(Result) || ThisDist < MinDist)
 			{
@@ -1841,11 +1881,11 @@ edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const 
 			if (!it.second.bUnderAttack || !it.second.bOnNavmesh) { continue; }
 			if (!UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { continue; }
 
-			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_NONE);
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_NONE, false);
 
 			if (NumPotentialDefenders >= 2) { continue; }
 
-			float ThisDist = vDist2DSq(it.second.Location, pBot->pEdict->v.origin);
+			float ThisDist = (bIsMarine) ? UTIL_GetPhaseDistanceBetweenPointsSq(it.second.Location, pBot->pEdict->v.origin) : vDist2DSq(it.second.Location, pBot->pEdict->v.origin);
 
 			if (FNullEnt(Result) || ThisDist < MinDist)
 			{
@@ -1863,11 +1903,11 @@ edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const 
 			if (!it.second.bUnderAttack || !it.second.bOnNavmesh) { continue; }
 			if (!UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { continue; }
 
-			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE);
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE, false);
 
 			if (NumPotentialDefenders >= 2) { continue; }
 
-			float ThisDist = vDist2DSq(it.second.Location, pBot->pEdict->v.origin);
+			float ThisDist = (bIsMarine) ? UTIL_GetPhaseDistanceBetweenPointsSq(it.second.Location, pBot->pEdict->v.origin) : vDist2DSq(it.second.Location, pBot->pEdict->v.origin);
 
 			if (FNullEnt(Result) || ThisDist < MinDist)
 			{
@@ -2143,6 +2183,36 @@ Vector UTIL_GetRandomPointOfInterest()
 	return ZERO_VECTOR;
 }
 
+Vector UTIL_GetNearestPointOfInterestToLocation(const Vector SearchLocation, bool bUsePhaseDistance)
+{
+	Vector Result = UTIL_GetCommChairLocation();
+	float MinDist = (bUsePhaseDistance) ? UTIL_GetPhaseDistanceBetweenPointsSq(SearchLocation, UTIL_GetCommChairLocation()) : vDist2DSq(SearchLocation, UTIL_GetCommChairLocation());
+
+	for (int i = 0; i < NumTotalHives; i++)
+	{
+		float ThisDist = (bUsePhaseDistance) ? UTIL_GetPhaseDistanceBetweenPointsSq(SearchLocation, Hives[i].FloorLocation) : vDist2DSq(SearchLocation, Hives[i].FloorLocation);
+
+		if (ThisDist < MinDist)
+		{
+			Result = Hives[i].FloorLocation;
+			MinDist = ThisDist;
+		}
+	}
+
+	for (int i = 0; i < NumTotalResNodes; i++)
+	{
+		float ThisDist = (bUsePhaseDistance) ? UTIL_GetPhaseDistanceBetweenPointsSq(SearchLocation, ResourceNodes[i].origin) : vDist2DSq(SearchLocation, ResourceNodes[i].origin);
+
+		if (ThisDist < MinDist)
+		{
+			Result = ResourceNodes[i].origin;
+			MinDist = ThisDist;
+		}
+	}
+
+	return Result;
+}
+
 const hive_definition* UTIL_GetNearestHiveUnderSiege(const Vector SearchLocation)
 {
 	int Result = -1;
@@ -2270,7 +2340,7 @@ bool UTIL_IsAnyHumanNearLocationWithoutEquipment(const Vector& Location, const f
 	return false;
 }
 
-edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructureType StructureType, const float SearchDist, bool bFullyConstructedOnly)
+edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructureType StructureType, const float SearchDist, bool bFullyConstructedOnly, bool bUsePhaseGates)
 {
 	if (StructureType == STRUCTURE_ALIEN_HIVE)
 	{
@@ -2282,7 +2352,7 @@ edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructure
 		{
 			if (!bFullyConstructedOnly || Hives[i].Status == HIVE_STATUS_BUILT)
 			{
-				float ThisDist = vDist2DSq(Hives[i].Location, Location);
+				float ThisDist = (bUsePhaseGates) ? UTIL_GetPhaseDistanceBetweenPointsSq(Hives[i].Location, Location) : vDist2DSq(Hives[i].Location, Location);
 
 				if (ThisDist < MaxDist && (!NearestHive || ThisDist < MinDist))
 				{
@@ -2309,7 +2379,7 @@ edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructure
 			if (!UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { continue; }
 			if (bFullyConstructedOnly && !it.second.bFullyConstructed) { continue; }
 
-			float thisDist = vDist2DSq(Location, it.second.Location);
+			float thisDist = (bUsePhaseGates) ? UTIL_GetPhaseDistanceBetweenPointsSq(it.second.Location, Location) : vDist2DSq(Location, it.second.Location);
 
 			if (thisDist < SearchDistSq && (!Result || thisDist < MinDist))
 			{
@@ -2326,7 +2396,7 @@ edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructure
 			if (!UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { continue; }
 			if (bFullyConstructedOnly && !it.second.bFullyConstructed) { continue; }
 
-			float thisDist = vDist2DSq(Location, it.second.Location);
+			float thisDist = (bUsePhaseGates) ? UTIL_GetPhaseDistanceBetweenPointsSq(it.second.Location, Location) : vDist2DSq(Location, it.second.Location);
 
 			if (thisDist < SearchDistSq && (!Result || thisDist < MinDist))
 			{
@@ -2485,7 +2555,7 @@ edict_t* UTIL_FindClosestMarineStructureUnbuilt(const Vector& SearchLocation, fl
 		if (!it.second.bOnNavmesh) { continue; }
 		if (it.second.bFullyConstructed) { continue; }
 
-		float thisDist = vDist2DSq(SearchLocation, it.second.Location);
+		float thisDist = UTIL_GetPhaseDistanceBetweenPointsSq(SearchLocation, it.second.Location);
 
 		if (thisDist < SearchDistSq && (!NearestStructure || thisDist < nearestDist))
 		{
@@ -2813,6 +2883,7 @@ float UTIL_GetStructureRadiusForObstruction(NSStructureType StructureType)
 	switch (StructureType)
 	{
 	case STRUCTURE_MARINE_TURRETFACTORY:
+	case STRUCTURE_MARINE_COMMCHAIR:
 		return 60.0f;
 	default:
 		return 40.0f;
@@ -3047,8 +3118,8 @@ edict_t* UTIL_AlienFindNearestHealingSpot(bot_t* pBot, const Vector SearchLocati
 {
 	edict_t* HealingSources[3];
 
-	HealingSources[0] = UTIL_GetNearestStructureIndexOfType(SearchLocation, STRUCTURE_ALIEN_HIVE, UTIL_MetresToGoldSrcUnits(100.0f), true);
-	HealingSources[1] = UTIL_GetNearestStructureIndexOfType(SearchLocation, STRUCTURE_ALIEN_DEFENCECHAMBER, UTIL_MetresToGoldSrcUnits(100.0f), true);
+	HealingSources[0] = UTIL_GetNearestStructureIndexOfType(SearchLocation, STRUCTURE_ALIEN_HIVE, UTIL_MetresToGoldSrcUnits(100.0f), true, IsPlayerMarine(pBot->pEdict));
+	HealingSources[1] = UTIL_GetNearestStructureIndexOfType(SearchLocation, STRUCTURE_ALIEN_DEFENCECHAMBER, UTIL_MetresToGoldSrcUnits(100.0f), true, IsPlayerMarine(pBot->pEdict));
 	HealingSources[2] = UTIL_GetNearestPlayerOfClass(SearchLocation, CLASS_GORGE, UTIL_MetresToGoldSrcUnits(100.0f), pBot->pEdict);
 
 	int NearestHealingSource = -1;
@@ -3288,7 +3359,7 @@ int UTIL_GetNumEquipmentInPlay()
 
 bool UTIL_BaseIsInDistress()
 {
-	int NumDefenders = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), MARINE_TEAM, nullptr, CLASS_NONE);
+	int NumDefenders = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), MARINE_TEAM, nullptr, CLASS_NONE, true);
 	int NumMarines = UTIL_GetNumPlayersOnTeam(MARINE_TEAM);
 
 	float MarineRatio = ((float)NumDefenders / (float)(NumMarines - 1));
@@ -3297,9 +3368,9 @@ bool UTIL_BaseIsInDistress()
 
 	int NumInfantryPortals = UTIL_GetNumBuiltStructuresOfType(STRUCTURE_MARINE_INFANTRYPORTAL);
 
-	int NumOnos = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_ONOS);
-	int NumFades = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_FADE);
-	int NumSkulks = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_SKULK);
+	int NumOnos = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_ONOS, false);
+	int NumFades = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_FADE, false);
+	int NumSkulks = UTIL_GetNumPlayersOfTeamInArea(UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f), ALIEN_TEAM, nullptr, CLASS_SKULK, false);
 
 	float MarineForce = (float)NumDefenders * 1.0f;
 	float AlienForce = ((float)NumSkulks * 1.0f) + ((NumFades + NumOnos) * 1.5f);
@@ -3440,6 +3511,37 @@ float UTIL_GetPhaseDistanceBetweenPoints(const Vector StartPoint, const Vector E
 
 	float PhaseDist = vDist2DSq(StartPoint, StartPhase->v.origin) + vDist2DSq(EndPoint, EndPhase->v.origin);
 	PhaseDist = sqrtf(PhaseDist);
+
+
+	return fminf(DirectDist, PhaseDist);
+}
+
+float UTIL_GetPhaseDistanceBetweenPointsSq(const Vector StartPoint, const Vector EndPoint)
+{
+	int NumPhaseGates = UTIL_GetNumBuiltStructuresOfType(STRUCTURE_MARINE_PHASEGATE);
+
+	float DirectDist = vDist2DSq(StartPoint, EndPoint);
+
+	if (NumPhaseGates < 2)
+	{
+		return DirectDist;
+	}
+
+	edict_t* StartPhase = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, StartPoint, DirectDist, true);
+
+	if (FNullEnt(StartPhase))
+	{
+		return DirectDist;
+	}
+
+	edict_t* EndPhase = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, EndPoint, DirectDist, true);
+
+	if (FNullEnt(EndPhase))
+	{
+		return DirectDist;
+	}
+
+	float PhaseDist = vDist2DSq(StartPoint, StartPhase->v.origin) + vDist2DSq(EndPoint, EndPhase->v.origin);
 
 
 	return fminf(DirectDist, PhaseDist);

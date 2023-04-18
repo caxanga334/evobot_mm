@@ -108,7 +108,7 @@ static const int min_desired_arms_labs = 1;
 static const int min_desired_resource_towers = 3;
 
 // How far a bot can be from a useable object when trying to interact with it. Used also for melee attacks
-static const float max_player_use_reach = 50.0f;
+static const float max_player_use_reach = 55.0f;
 
 // Minimum time a bot can wait between attempts to use something in seconds (when not holding the use key down)
 static const float min_use_gap = 0.5f;
@@ -151,6 +151,8 @@ bool UTIL_PlayerHasLOSToLocation(const edict_t* Player, const Vector Target, con
 
 // Returns the player's eye position (origin + view_ofs)
 Vector UTIL_GetPlayerEyePosition(const edict_t* Player);
+
+Vector UTIL_GetPlayerAttemptedMoveDir(const edict_t* Player);
 
 // Draws a white line between start and end for the given player (pEntity) for 0.1s
 void UTIL_DrawLine(const edict_t * pEntity, Vector start, Vector end);
@@ -279,7 +281,6 @@ void BotMarineSetPrimaryTask(bot_t* pBot, bot_task* Task);
 
 void BotAlienSetPrimaryTask(bot_t* pBot, bot_task* Task);
 void BotAlienSetSecondaryTask(bot_t* pBot, bot_task* Task);
-void BotAlienCheckPriorityTargets(bot_t* pBot, bot_task* Task);
 void BotAlienCheckDefendTargets(bot_t* pBot, bot_task* Task);
 
 void BotMarineSetSecondaryTask(bot_t* pBot, bot_task* Task);

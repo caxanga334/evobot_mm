@@ -1442,9 +1442,9 @@ dtStatus FindPathToPoint(const int NavProfileIndex, const Vector& FromLocation, 
 	return DT_SUCCESS;
 }
 
-dtStatus FindPhaseGatePathToPoint(bot_t* pBot, Vector FromLocation, Vector ToLocation, bot_path_node* path, int* pathSize, bool bAllowPartial)
+dtStatus FindPhaseGatePathToPoint(const int NavProfileIndex, Vector FromLocation, Vector ToLocation, bot_path_node* path, int* pathSize, float MaxAcceptableDistance)
 {
-	int NavProfileIndex = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
+	*pathSize = 0;
 
 	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(NavProfileIndex);
 	const dtNavMesh* m_navMesh = UTIL_GetNavMeshForProfile(NavProfileIndex);
@@ -1455,28 +1455,19 @@ dtStatus FindPhaseGatePathToPoint(bot_t* pBot, Vector FromLocation, Vector ToLoc
 		return DT_FAILURE;
 	}
 
-	dtStatus status;
+	bot_path_node PathToPhaseStart[MAX_PATH_SIZE];
+	memset(PathToPhaseStart, 0, sizeof(PathToPhaseStart));
+	int PhaseStartPathSize = 0;
 
-	dtPolyRef StartPoly;
-	float StartNearest[3];
-	dtPolyRef EndPoly;
-	float EndNearest[3];
-	dtPolyRef StartPhaseGatePoly;
-	float StartPhaseNearest[3];
-	dtPolyRef EndPhaseGatePoly;
-	float EndPhaseNearest[3];
-
-	int nStartPhasePathCount = 0;
-	dtPolyRef StartPhasePolyPath[MAX_PATH_POLY / 2];
-
-	int nEndPhasePathCount = 0;
-	dtPolyRef EndPhasePolyPath[MAX_PATH_POLY / 2];
+	bot_path_node PathToFinalDestination[MAX_PATH_SIZE];
+	memset(PathToFinalDestination, 0, sizeof(PathToFinalDestination));
+	int PhaseEndPathSize = 0;
 
 	edict_t* StartPhaseGate = nullptr;
 	edict_t* EndPhaseGate = nullptr;
 
-	StartPhaseGate = UTIL_GetNearestStructureIndexOfType(FromLocation, STRUCTURE_MARINE_PHASEGATE, UTIL_MetresToGoldSrcUnits(30.0f), true);
-	EndPhaseGate = UTIL_GetNearestStructureIndexOfType(ToLocation, STRUCTURE_MARINE_PHASEGATE, UTIL_MetresToGoldSrcUnits(30.0f), true);
+	StartPhaseGate = UTIL_GetNearestStructureIndexOfType(FromLocation, STRUCTURE_MARINE_PHASEGATE, UTIL_MetresToGoldSrcUnits(100.0f), true, false);
+	EndPhaseGate = UTIL_GetNearestStructureIndexOfType(ToLocation, STRUCTURE_MARINE_PHASEGATE, UTIL_MetresToGoldSrcUnits(100.0f), true, false);
 
 	if (!StartPhaseGate || !EndPhaseGate || (StartPhaseGate == EndPhaseGate)) { return DT_FAILURE;  }
 
@@ -1484,217 +1475,47 @@ dtStatus FindPhaseGatePathToPoint(bot_t* pBot, Vector FromLocation, Vector ToLoc
 
 	if (TotalDist > vDist2DSq(FromLocation, ToLocation)) { return DT_FAILURE; }
 
-	float pStartPos[3] = { FromLocation.x, FromLocation.z, -FromLocation.y };
-	float pEndPos[3] = { ToLocation.x, ToLocation.z, -ToLocation.y };
+	dtStatus RouteToFirstPhaseGate = FindPathClosestToPoint(NavProfileIndex, FromLocation, StartPhaseGate->v.origin, PathToPhaseStart, &PhaseStartPathSize, max_player_use_reach);
 
-	float pStartPhasePos[3] = { StartPhaseGate->v.origin.x, StartPhaseGate->v.origin.z, -StartPhaseGate->v.origin.y };
-	float pEndPhasePos[3] = { EndPhaseGate->v.origin.x, EndPhaseGate->v.origin.z, -EndPhaseGate->v.origin.y };
-
-
-	// find the start polygon
-	status = m_navQuery->findNearestPoly(pStartPos, pExtents, m_navFilter, &StartPoly, StartNearest);
-	if ((status & DT_FAILURE) || (status & DT_STATUS_DETAIL_MASK))
+	if (dtStatusFailed(RouteToFirstPhaseGate))
 	{
 		return DT_FAILURE;
 	}
 
-	// find the end polygon
-	status = m_navQuery->findNearestPoly(pEndPos, pExtents, m_navFilter, &EndPoly, EndNearest);
-	if ((status & DT_FAILURE) || (status & DT_STATUS_DETAIL_MASK))
+	dtStatus RouteToFinalPoint = FindPathClosestToPoint(NavProfileIndex, EndPhaseGate->v.origin, ToLocation, PathToFinalDestination, &PhaseEndPathSize, MaxAcceptableDistance);
+
+	if (dtStatusFailed(RouteToFinalPoint))
 	{
 		return DT_FAILURE;
 	}
 
-	// find the starting phase gate polygon
-	status = m_navQuery->findNearestPoly(pStartPhasePos, pExtents, m_navFilter, &StartPhaseGatePoly, StartPhaseNearest);
-	if ((status & DT_FAILURE) || (status & DT_STATUS_DETAIL_MASK))
+	// Now we join together the path to the starting phase gate and the path from the phase destination to the end, and add the phase itself in the middle
+
+	int CurrPathIndex = 0;
+
+	for (int i = 0; i < PhaseStartPathSize; i++)
 	{
-		return DT_FAILURE;
+		memcpy(&path[CurrPathIndex++], &PathToPhaseStart[i], sizeof(bot_path_node));
 	}
 
-	// find the end phase gate polygon
-	status = m_navQuery->findNearestPoly(pEndPhasePos, pExtents, m_navFilter, &EndPhaseGatePoly, EndPhaseNearest);
-	if ((status & DT_FAILURE) || (status & DT_STATUS_DETAIL_MASK))
+	// Add a node to inform the bot they have to use the phase gate
+	path[CurrPathIndex].Location = EndPhaseGate->v.origin + Vector(0.0f, 0.0f, 10.0f);
+	path[CurrPathIndex].area = SAMPLE_POLYAREA_PHASEGATE;
+	path[CurrPathIndex].flag = SAMPLE_POLYFLAGS_PHASEGATE;
+	path[CurrPathIndex].poly = UTIL_GetNearestPolyRefForEntity(EndPhaseGate);
+	path[CurrPathIndex].requiredZ = EndPhaseGate->v.origin.z;
+
+	CurrPathIndex++;
+
+	// Append the path from the destination phase to the end
+	for (int i = 1; i < PhaseEndPathSize; i++)
 	{
-		return DT_FAILURE;
+		memcpy(&path[CurrPathIndex++], &PathToFinalDestination[i], sizeof(bot_path_node));
 	}
 
-	status = m_navQuery->findPath(StartPoly, StartPhaseGatePoly, StartNearest, StartPhaseNearest, m_navFilter, StartPhasePolyPath, &nStartPhasePathCount, (MAX_PATH_POLY / 2));
+	*pathSize = CurrPathIndex;
 
-	if (StartPhasePolyPath[nStartPhasePathCount - 1] != StartPhaseGatePoly)
-	{
-		float epos[3];
-		dtVcopy(epos, StartPhaseNearest);
-
-		m_navQuery->closestPointOnPoly(StartPhasePolyPath[nStartPhasePathCount - 1], StartPhaseNearest, epos, 0);
-
-		if (dtVdistSqr(EndNearest, epos) > sqrf(max_player_use_reach))
-		{
-			return DT_FAILURE;
-		}
-		else
-		{
-			dtVcopy(EndNearest, epos);
-		}
-	}
-
-
-	status = m_navQuery->findPath(EndPhaseGatePoly, EndPoly, EndPhaseNearest, EndNearest, m_navFilter, EndPhasePolyPath, &nEndPhasePathCount, (MAX_PATH_POLY / 2));
-
-	if (EndPhasePolyPath[nEndPhasePathCount - 1] != EndPoly)
-	{
-		float epos[3];
-		dtVcopy(epos, EndNearest);
-
-		m_navQuery->closestPointOnPoly(EndPhasePolyPath[nEndPhasePathCount - 1], EndNearest, epos, 0);
-
-		if (dtVdistSqr(EndNearest, epos) > sqrf(max_player_use_reach))
-		{
-			return DT_FAILURE;
-		}
-		else
-		{
-			dtVcopy(EndNearest, epos);
-		}
-	}
-
-	float StartPhaseStraightPath[(MAX_PATH_SIZE / 2) * 3];
-	unsigned char straightStartPhasePathFlags[MAX_PATH_SIZE / 2];
-	dtPolyRef StraightStartPhasePolyPath[MAX_PATH_SIZE / 2];
-	int nStartPhaseVertCount = 0;
-
-	float EndPhaseStraightPath[(MAX_PATH_SIZE / 2) * 3];
-	unsigned char straightEndPhasePathFlags[MAX_PATH_SIZE / 2];
-	dtPolyRef StraightEndPhasePolyPath[MAX_PATH_SIZE / 2];
-	int nEndPhaseVertCount = 0;
-
-	status = m_navQuery->findStraightPath(StartNearest, StartPhaseNearest, StartPhasePolyPath, nStartPhasePathCount, StartPhaseStraightPath, straightStartPhasePathFlags, StraightStartPhasePolyPath, &nStartPhaseVertCount, (MAX_PATH_SIZE / 2), DT_STRAIGHTPATH_AREA_CROSSINGS);
-	if ((status & DT_FAILURE) || (status & DT_STATUS_DETAIL_MASK) || nStartPhaseVertCount == 0)
-	{
-		return (status & DT_STATUS_DETAIL_MASK); // couldn't create a path
-	}
-
-	status = m_navQuery->findStraightPath(EndPhaseNearest, EndNearest, EndPhasePolyPath, nEndPhasePathCount, EndPhaseStraightPath, straightEndPhasePathFlags, StraightEndPhasePolyPath, &nEndPhaseVertCount, (MAX_PATH_SIZE / 2), DT_STRAIGHTPATH_AREA_CROSSINGS);
-	if ((status & DT_FAILURE) || (status & DT_STATUS_DETAIL_MASK) || nEndPhaseVertCount == 0)
-	{
-		return (status & DT_STATUS_DETAIL_MASK); // couldn't create a path
-	}
-
-
-	int pathLengthInBytes = MAX_PATH_SIZE * sizeof(bot_path_node);
-	memset(path, 0, pathLengthInBytes);
-
-	unsigned char CurrArea;
-
-	int nVertCount = 0;
-
-	m_navMesh->getPolyArea(StartPhasePolyPath[0], &CurrArea);
-
-	// At this point we have our path.  Copy it to the path store
-	int nIndex = 0;
-	TraceResult hit;
-	Vector TraceStart;
-
-	int NumTotalVerts = 0;
-
-	for (int nVert = 0; nVert < nStartPhaseVertCount; nVert++)
-	{
-		path[(nVert)].Location.x = StartPhaseStraightPath[nIndex++];
-		path[(nVert)].Location.z = StartPhaseStraightPath[nIndex++];
-		path[(nVert)].Location.y = -StartPhaseStraightPath[nIndex++];
-
-		TraceStart.x = path[(nVert)].Location.x;
-		TraceStart.y = path[(nVert)].Location.y;
-		TraceStart.z = path[(nVert)].Location.z;
-
-		UTIL_TraceLine(TraceStart, (TraceStart - Vector(0.0f, 0.0f, 100.0f)), ignore_monsters, ignore_glass, pBot->pEdict->v.pContainingEntity, &hit);
-
-		if (hit.flFraction < 1.0f)
-		{
-			bool isCrouchedArea = (CurrArea == SAMPLE_POLYAREA_CROUCH);
-
-			path[(nVert)].Location = hit.vecEndPos + UTIL_OriginOffsetFromFloor(pBot->pEdict, isCrouchedArea);
-		}
-
-		path[(nVert)].requiredZ = path[(nVert)].Location.z;
-
-		if (CurrArea == SAMPLE_POLYAREA_WALLCLIMB || CurrArea == SAMPLE_POLYAREA_LADDER)
-		{
-			int HullNum = GetPlayerHullIndex(pBot->pEdict, false);
-			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[(nVert - 1)].Location, path[(nVert)].Location, HullNum);
-			path[(nVert)].requiredZ = fmaxf(NewRequiredZ, path[(nVert)].Location.z);
-
-			if (CurrArea == SAMPLE_POLYAREA_LADDER)
-			{
-				path[(nVert)].requiredZ += 5.0f;
-			}
-		}
-		else
-		{
-			path[(nVert)].requiredZ = path[(nVert)].Location.z;
-		}
-
-		path[(nVert)].flag = straightStartPhasePathFlags[nVert];
-		path[(nVert)].area = CurrArea;
-		path[(nVert)].poly = StartPhasePolyPath[nVert];
-
-		m_navMesh->getPolyArea(StartPhasePolyPath[nVert], &CurrArea);
-
-		NumTotalVerts++;
-	}
-
-	int StartVertCount = NumTotalVerts;
-	nIndex = 0;
-
-	for (int nVert = 0; nVert < nEndPhaseVertCount; nVert++)
-	{
-		path[(nVert + StartVertCount)].Location.x = EndPhaseStraightPath[nIndex++];
-		path[(nVert + StartVertCount)].Location.z = EndPhaseStraightPath[nIndex++];
-		path[(nVert + StartVertCount)].Location.y = -EndPhaseStraightPath[nIndex++];
-
-		TraceStart.x = path[(nVert + StartVertCount)].Location.x;
-		TraceStart.y = path[(nVert + StartVertCount)].Location.y;
-		TraceStart.z = path[(nVert + StartVertCount)].Location.z;
-
-		UTIL_TraceLine(TraceStart, (TraceStart - Vector(0.0f, 0.0f, 100.0f)), ignore_monsters, ignore_glass, pBot->pEdict->v.pContainingEntity, &hit);
-
-		if (hit.flFraction < 1.0f)
-		{
-			bool isCrouchedArea = (CurrArea == SAMPLE_POLYAREA_CROUCH);
-
-			path[(nVert + StartVertCount)].Location = hit.vecEndPos + UTIL_OriginOffsetFromFloor(pBot->pEdict, isCrouchedArea);
-		}
-
-		path[(nVert + StartVertCount)].requiredZ = path[(nVert + StartVertCount)].Location.z;
-
-		if (CurrArea == SAMPLE_POLYAREA_WALLCLIMB)
-		{
-			int HullNum = GetPlayerHullIndex(pBot->pEdict, false);
-			float NewRequiredZ = UTIL_FindZHeightForWallClimb(path[((nVert + StartVertCount) - 1)].Location, path[(nVert + StartVertCount)].Location, HullNum);
-			path[(nVert + StartVertCount)].requiredZ = fmaxf(NewRequiredZ, path[(nVert + StartVertCount)].Location.z);
-
-		}
-		else
-		{
-			path[(nVert)].requiredZ = path[(nVert)].Location.z;
-		}
-
-		path[(nVert + StartVertCount)].flag = (nVert == 0) ? SAMPLE_POLYFLAGS_PHASEGATE : straightEndPhasePathFlags[nVert];
-		path[(nVert + StartVertCount)].area = (nVert == 0) ? SAMPLE_POLYAREA_PHASEGATE : CurrArea;
-		path[(nVert + StartVertCount)].poly = EndPhasePolyPath[nVert];
-
-		m_navMesh->getPolyArea(EndPhasePolyPath[nVert], &CurrArea);
-
-		NumTotalVerts++;
-	}
-
-	*pathSize = NumTotalVerts;
-
-
-	pBot->BotNavInfo.CurrentPathPoint = 1;
 	return DT_SUCCESS;
-
-
 }
 
 dtStatus FindPathClosestToPoint(const int NavProfileIndex, const Vector& FromLocation, const Vector& ToLocation, bot_path_node* path, int* pathSize, float MaxAcceptableDistance)
@@ -1851,7 +1672,7 @@ dtStatus FindPathClosestToPoint(bot_t* pBot, const BotMoveStyle MoveStyle, const
 
 	if (IsPlayerMarine(pBot->pEdict) && UTIL_GetNumBuiltStructuresOfType(STRUCTURE_MARINE_PHASEGATE) > 1)
 	{
-		dtStatus PhaseStatus = FindPhaseGatePathToPoint(pBot, pBot->pEdict->v.origin, ToLocation, path, pathSize, false);
+		dtStatus PhaseStatus = FindPhaseGatePathToPoint(NavProfileIndex, pBot->pEdict->v.origin, ToLocation, path, pathSize, MaxAcceptableDistance);
 
 		if (dtStatusSucceed(PhaseStatus))
 		{
@@ -2689,9 +2510,9 @@ void LadderMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint, flo
 
 void PhaseGateMove(bot_t* pBot, const Vector StartPoint, const Vector EndPoint)
 {
-	edict_t* NearestPhaseGate = UTIL_GetNearestStructureIndexOfType(pBot->pEdict->v.origin, STRUCTURE_MARINE_PHASEGATE, UTIL_MetresToGoldSrcUnits(2.0f), true);
+	edict_t* NearestPhaseGate = UTIL_GetNearestStructureIndexOfType(pBot->pEdict->v.origin, STRUCTURE_MARINE_PHASEGATE, UTIL_MetresToGoldSrcUnits(2.0f), true, false);
 
-	if (!NearestPhaseGate) { return; }
+	if (FNullEnt(NearestPhaseGate)) { return; }
 
 	if (UTIL_PlayerInUseRange(pBot->pEdict, NearestPhaseGate))
 	{
@@ -3190,6 +3011,79 @@ bool UTIL_PointIsDirectlyReachable(const int NavProfileIndex, const Vector& star
 		m_navQuery->closestPointOnPoly(PolyPath[pathCount - 1], EndNearest, epos, 0);
 
 		if (dtVdistSqr(EndNearest, epos) > sqrf(max_player_use_reach))
+		{
+			return false;
+		}
+		else
+		{
+			return true;
+		}
+	}
+
+	if (EndPoly == PolyPath[pathCount - 1]) { return true; }
+
+	float ClosestPoint[3] = { 0.0f, 0.0f, 0.0f };
+	float Height = 0.0f;
+	m_navQuery->closestPointOnPolyBoundary(PolyPath[pathCount - 1], EndNearest, ClosestPoint);
+	m_navQuery->getPolyHeight(PolyPath[pathCount - 1], ClosestPoint, &Height);
+
+
+	return (Height == 0.0f || Height == EndNearest[1]);
+}
+
+bool UTIL_TraceNav(const int NavProfileIndex, const Vector start, const Vector target, const float MaxAcceptableDistance)
+{
+	const dtNavMeshQuery* m_navQuery = UTIL_GetNavMeshQueryForProfile(NavProfileIndex);
+	const dtNavMesh* m_navMesh = UTIL_GetNavMeshForProfile(NavProfileIndex);
+	const dtQueryFilter* m_Filter = UTIL_GetNavMeshFilterForProfile(NavProfileIndex);
+
+	if (!m_navQuery) { return false; }
+
+	float pStartPos[3] = { start.x, start.z, -start.y };
+	float pEndPos[3] = { target.x, target.z, -target.y };
+
+	dtPolyRef StartPoly;
+	dtPolyRef EndPoly;
+	float StartNearest[3] = { 0.0f, 0.0f, 0.0f };
+	float EndNearest[3] = { 0.0f, 0.0f, 0.0f };
+
+	float hitDist;
+	float HitNormal[3];
+
+	dtPolyRef PolyPath[MAX_PATH_POLY];
+	int pathCount = 0;
+
+	float MaxReachableExtents[3] = { MaxAcceptableDistance, 50.0f, MaxAcceptableDistance };
+
+	dtStatus FoundStartPoly = m_navQuery->findNearestPoly(pStartPos, MaxReachableExtents, m_Filter, &StartPoly, StartNearest);
+
+	if (!dtStatusSucceed(FoundStartPoly))
+	{
+		return false;
+	}
+
+	dtStatus FoundEndPoly = m_navQuery->findNearestPoly(pEndPos, MaxReachableExtents, m_Filter, &EndPoly, EndNearest);
+
+	if (!dtStatusSucceed(FoundEndPoly))
+	{
+		return false;
+	}
+
+	// All polys are convex, therefore definitely reachable if start and end points are within the same poly
+	if (StartPoly == EndPoly) { return true; }
+
+	m_navQuery->raycast(StartPoly, StartNearest, EndNearest, m_Filter, &hitDist, HitNormal, PolyPath, &pathCount, MAX_PATH_SIZE);
+
+	if (hitDist < 1.0f)
+	{
+		if (pathCount == 0) { return false; }
+
+		float epos[3];
+		dtVcopy(epos, EndNearest);
+
+		m_navQuery->closestPointOnPoly(PolyPath[pathCount - 1], EndNearest, epos, 0);
+
+		if (dtVdistSqr(EndNearest, epos) > sqrf(MaxAcceptableDistance))
 		{
 			return false;
 		}
@@ -3767,7 +3661,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 		ClearBotMovement(pBot);
 		return true;
 	}
-
+	
 	UTIL_UpdateBotMovementStatus(pBot);
 
 	nav_status* BotNavInfo = &pBot->BotNavInfo;
@@ -3818,7 +3712,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 	bool bMoveStyleChanged = (MoveStyle != pBot->BotNavInfo.MoveStyle);
 	bool bNavProfileChanged = (MoveProfile != pBot->BotNavInfo.LastMoveProfile);
 	bool bCanRecalculatePath = (gpGlobals->time - pBot->BotNavInfo.LastPathCalcTime > MIN_PATH_RECALC_TIME);
-	bool bDestinationChanged = (Destination != BotNavInfo->TargetDestination);
+	bool bDestinationChanged = (!vEquals(Destination, BotNavInfo->TargetDestination));
 
 	// Only recalculate the path if there isn't a path, or something has changed and enough time has elapsed since the last path calculation
 	bool bShouldCalculatePath = (BotNavInfo->PathSize == 0 || (bCanRecalculatePath && (bMoveStyleChanged || bNavProfileChanged || bDestinationChanged || BotNavInfo->bPendingRecalculation)));
@@ -3881,7 +3775,7 @@ bool MoveTo(bot_t* pBot, const Vector Destination, const BotMoveStyle MoveStyle)
 			}
 			else
 			{
-				if (BotNavInfo->LastNavMeshPosition != ZERO_VECTOR)
+				if (BotNavInfo->LastNavMeshPosition != ZERO_VECTOR && vDist2DSq(BotNavInfo->LastNavMeshPosition, pBot->pEdict->v.origin) > UTIL_GetPlayerRadius(pBot->pEdict))
 				{
 					ClearBotStuckMovement(pBot);
 					ClearBotPath(pBot);
@@ -4005,13 +3899,13 @@ Vector FindClosestPointBackOnPath(bot_t* pBot)
 	Vector ValidNavmeshPoint = ZERO_VECTOR;
 
 	// If we have a location where we know we were last on the nav mesh and following a path, use that. Otherwise, use the comm chair location
-	if (pBot->BotNavInfo.LastPathFollowPosition != ZERO_VECTOR)
+	if (pBot->BotNavInfo.LastPathFollowPosition != ZERO_VECTOR && vDist2DSq(pBot->BotNavInfo.LastPathFollowPosition, pBot->pEdict->v.origin) > UTIL_GetPlayerRadius(pBot->pEdict))
 	{
 		ValidNavmeshPoint = pBot->BotNavInfo.LastPathFollowPosition;
 	}
 	else
 	{
-		ValidNavmeshPoint = UTIL_GetCommChairLocation();
+		ValidNavmeshPoint = UTIL_GetNearestPointOfInterestToLocation(pBot->pEdict->v.origin, false);
 	}
 
 	ValidNavmeshPoint = UTIL_ProjectPointToNavmesh(ValidNavmeshPoint, Vector(max_player_use_reach, max_player_use_reach, max_player_use_reach), NavProfileIndex);
@@ -4053,6 +3947,24 @@ Vector FindClosestPointBackOnPath(bot_t* pBot)
 		NewMoveLocation = (pBot->pEdict->v.origin - (MoveDir * 100.0f));
 
 		return NewMoveLocation;
+	}
+
+	return ZERO_VECTOR;
+}
+
+Vector FindClosestNavigablePointToDestination(const int NavProfileIndex, const Vector& FromLocation, const Vector& ToLocation, float MaxAcceptableDistance)
+{
+	bot_path_node Path[MAX_PATH_SIZE];
+	memset(Path, 0, sizeof(Path));
+	int PathSize = 0;
+
+	// Now we find a path backwards from the valid nav mesh point to our location, trying to get as close as we can to it
+
+	dtStatus PathFindingResult = FindPathClosestToPoint(BUILDING_REGULAR_NAV_PROFILE, FromLocation, ToLocation, Path, &PathSize, MaxAcceptableDistance);
+
+	if (dtStatusSucceed(PathFindingResult))
+	{
+		return Path[PathSize - 1].Location;
 	}
 
 	return ZERO_VECTOR;
@@ -4373,11 +4285,7 @@ Vector UTIL_ProjectPointToNavmesh(const Vector& Location, const int NavProfileIn
 
 	if (!m_navQuery) { return ZERO_VECTOR; }
 
-	Vector TraceHit = UTIL_GetTraceHitLocation(Location + Vector(0.0f, 0.0f, 10.0f), Location - Vector(0.0f, 0.0f, 500.0f));
-
-	Vector PointToProject = (TraceHit != ZERO_VECTOR) ? TraceHit : Location;
-
-	float pCheckLoc[3] = { PointToProject.x, PointToProject.z, -PointToProject.y };
+	float pCheckLoc[3] = { Location.x, Location.z, -Location.y };
 
 	dtPolyRef FoundPoly;
 	float NavNearest[3];
@@ -4476,11 +4384,18 @@ void HandlePlayerAvoidance(bot_t* pBot, const Vector MoveDestination)
 	const Vector BotLocation = pBot->pEdict->v.origin;
 	const Vector MoveDir = UTIL_GetVectorNormal2D((MoveDestination - pBot->pEdict->v.origin));
 
+	const int NavProfileIndex = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
+
 	for (int i = 0; i < 32; i++)
 	{
-		if (!FNullEnt(clients[i]) && clients[i] != pBot->pEdict && !IsPlayerDead(clients[i]) && !IsPlayerCommander(clients[i]) && !IsPlayerSpectator(clients[i]))
+		if (!FNullEnt(clients[i]) && clients[i] != pBot->pEdict && IsPlayerActiveInGame(clients[i]))
 		{
-			
+			// Don't do avoidance for a player if they're moving in broadly the same direction as us
+			Vector OtherMoveDir = UTIL_GetPlayerAttemptedMoveDir(clients[i]);
+
+			// Other player is moving in the same general direction, no need to do avoidance
+			if (UTIL_GetDotProduct2D(MoveDir, OtherMoveDir) > 0.0f) { continue; }
+
 			if (vDist3DSq(BotLocation, clients[i]->v.origin) <= avoidDistSq)
 			{
 				Vector BlockAngle = UTIL_GetVectorNormal2D(clients[i]->v.origin - BotLocation);
@@ -4498,18 +4413,32 @@ void HandlePlayerAvoidance(bot_t* pBot, const Vector MoveDestination)
 
 					// Determine if we should move left or right to clear them
 					Vector MoveRightVector = UTIL_GetCrossProduct(MoveDir, UP_VECTOR);
+
 					int modifier = vPointOnLine(pBot->pEdict->v.origin, MoveDestination, clients[i]->v.origin);
 
-					if (modifier == 0) { modifier = 1; }	
+					if (modifier == 0) { modifier = 1; }
 
-					pBot->desiredMovementDir = (MoveRightVector * modifier);
+					Vector PreferredMoveDir = (MoveRightVector * modifier);
 
-					// If we can't move in the direction we need to (e.g. next to wall or ledge) then back up and let them through
-					if ( !UTIL_PointIsDirectlyReachable(BotLocation, BotLocation + (pBot->desiredMovementDir * 32.0f)))
+					// First see if we have enough room to move in our preferred avoidance direction
+					if (UTIL_TraceNav(NavProfileIndex, BotLocation, BotLocation + (PreferredMoveDir * 32.0f), 2.0f))//  UTIL_PointIsDirectlyReachable(BotLocation, BotLocation + (PreferredMoveDir * 32.0f)))
 					{
-						pBot->desiredMovementDir = MoveDir * -1.0f;
+						UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, pBot->pEdict->v.origin + Vector(0.0f, 0.0f, 100.0f), 0, 255, 0);
+						pBot->desiredMovementDir = PreferredMoveDir;
+						return;
 					}
-					
+
+					// Then try the opposite direction
+					if (UTIL_TraceNav(NavProfileIndex, BotLocation, BotLocation - (PreferredMoveDir * 32.0f), 2.0f))
+					{
+						UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, pBot->pEdict->v.origin + Vector(0.0f, 0.0f, 100.0f), 0, 0, 255);
+						pBot->desiredMovementDir = -PreferredMoveDir;
+						return;
+					}
+
+					// Back up since we can't go either side
+					pBot->desiredMovementDir = MoveDir * -1.0f;
+					UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, pBot->pEdict->v.origin + Vector(0.0f, 0.0f, 100.0f), 255, 0, 0);
 				}
 			}
 		}

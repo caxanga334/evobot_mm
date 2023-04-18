@@ -86,6 +86,8 @@ void PopulateEmptyHiveList();
 // Returns the location of a randomly-selected resource node, comm chair, or hive
 Vector UTIL_GetRandomPointOfInterest();
 
+Vector UTIL_GetNearestPointOfInterestToLocation(const Vector SearchLocation, bool bUsePhaseDistance);
+
 bool IsAlienTraitCategoryAvailable(HiveTechStatus TraitCategory);
 
 unsigned char UTIL_GetAreaForObstruction(NSStructureType StructureType);
@@ -128,6 +130,9 @@ const hive_definition* UTIL_GetNearestBuiltHiveToLocation(const Vector SearchLoc
 // Taking phase gates into account, how far are the two points? Allows bots to intuit shortcuts using phase gates
 float UTIL_GetPhaseDistanceBetweenPoints(const Vector StartPoint, const Vector EndPoint);
 
+// Taking phase gates into account, how far are the two points? Allows bots to intuit shortcuts using phase gates. Returns squared distance.
+float UTIL_GetPhaseDistanceBetweenPointsSq(const Vector StartPoint, const Vector EndPoint);
+
 void SetNumberofHives(int NewValue);
 void SetHiveLocation(int HiveIndex, const Vector NewLocation);
 void SetHiveStatus(int HiveIndex, int NewStatus);
@@ -139,6 +144,8 @@ int UTIL_GetNumResNodes();
 
 void PrintHiveInfo();
 
+float GetCommanderViewZHeight();
+void SetCommanderViewZHeight(float NewValue);
 void AddMapLocation(const char* LocationName, Vector MinLocation, Vector MaxLocation);
 
 char* UTIL_GetClosestMapLocationToPoint(const Vector Point);
@@ -150,18 +157,19 @@ edict_t* UTIL_GetClosestStructureAtLocation(const Vector& Location, bool bMarine
 edict_t* UTIL_GetNearestItemOfType(const NSDeployableItem ItemType, const Vector Location, const float SearchDist);
 
 const dropped_marine_item* UTIL_GetNearestItemIndexOfType(const NSDeployableItem ItemType, const Vector Location, const float SearchDist);
-const dropped_marine_item* UTIL_GetNearestSpecialPrimaryWeapon(const Vector Location, const float SearchDist);
-const dropped_marine_item* UTIL_GetNearestEquipment(const Vector Location, const float SearchDist);
+const dropped_marine_item* UTIL_GetNearestSpecialPrimaryWeapon(const Vector Location, const float SearchDist, bool bUsePhaseDist);
+const dropped_marine_item* UTIL_GetNearestEquipment(const Vector Location, const float SearchDist, bool bUsePhaseDist);
 
 edict_t* UTIL_GetNearestUnbuiltStructureWithLOS(bot_t* pBot, const Vector Location, const float SearchDist, const int Team);
 
 edict_t* UTIL_GetNearestPlayerOfTeamInArea(const Vector Location, const float SearchRadius, const int Team, edict_t* IgnorePlayer, NSPlayerClass IgnoreClass);
-int UTIL_GetNumPlayersOfTeamInArea(const Vector Location, const float SearchRadius, const int Team, edict_t* IgnorePlayer, NSPlayerClass IgnoreClass);
+int UTIL_GetNumPlayersOfTeamInArea(const Vector Location, const float SearchRadius, const int Team, edict_t* IgnorePlayer, NSPlayerClass IgnoreClass, bool bUsePhaseDist);
 bool UTIL_IsPlayerOfTeamInArea(const Vector Location, const float SearchRadius, const int Team, edict_t* IgnorePlayer, NSPlayerClass IgnoreClas);
 bool UTIL_IsAlienPlayerInArea(const Vector Location, float SearchRadius);
 bool UTIL_IsAlienPlayerInArea(const Vector Location, float SearchRadius, edict_t* IgnorePlayer);
 bool UTIL_IsNearActiveHive(const Vector Location, float SearchRadius);
 
+edict_t* UTIL_GetFirstPlacedStructureOfType(const NSStructureType StructureType);
 edict_t* UTIL_GetFirstCompletedStructureOfType(const NSStructureType StructureType);
 edict_t* UTIL_GetFirstIdleStructureOfType(const NSStructureType StructureType);
 
@@ -207,7 +215,7 @@ bool UTIL_IsAnyHumanNearLocationWithoutSpecialWeapon(const Vector& Location, con
 bool UTIL_IsAnyHumanNearLocationWithoutWeapon(const NSWeapon WeaponType, const Vector& Location, const float SearchDist);
 edict_t* UTIL_GetNearestHumanAtLocation(const Vector& Location, const float SearchDist);
 
-edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructureType StructureType, const float SearchDist, bool bFullyConstructedOnly);
+edict_t* UTIL_GetNearestStructureIndexOfType(const Vector& Location, NSStructureType StructureType, const float SearchDist, bool bFullyConstructedOnly, bool bUsePhaseGates);
 
 int UTIL_FindClosestMarinePlayerToLocation(const edict_t* SearchingPlayer, const Vector& Location, const float SearchRadius);
 

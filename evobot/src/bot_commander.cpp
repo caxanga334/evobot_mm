@@ -290,11 +290,11 @@ bool BotCommanderDropItem(bot_t* pBot, int ActionIndex, int Priority)
 	pBot->pEdict->v.v_angle = ZERO_VECTOR;
 
 	Vector CommanderViewOrigin = pBot->pEdict->v.origin;
-	CommanderViewOrigin.z = pBot->map_max_extent;
+	CommanderViewOrigin.z = GetCommanderViewZHeight();
 
 	if (!action->DesiredCommanderLocation || vDist2DSq(action->DesiredCommanderLocation, action->BuildLocation) > sqrf(UTIL_MetresToGoldSrcUnits(2.0f)))
 	{
-		action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, pBot->map_max_extent);
+		action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, GetCommanderViewZHeight());
 
 		if (action->DesiredCommanderLocation == ZERO_VECTOR)
 		{
@@ -313,7 +313,7 @@ bool BotCommanderDropItem(bot_t* pBot, int ActionIndex, int Priority)
 		else
 		{
 			action->BuildLocation = UTIL_GetRandomPointOnNavmeshInRadius(MARINE_REGULAR_NAV_PROFILE, action->BuildLocation, UTIL_MetresToGoldSrcUnits(1.0f));
-			action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, pBot->map_max_extent);
+			action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, GetCommanderViewZHeight());
 		}
 	}
 
@@ -802,83 +802,117 @@ void CommanderQueueItemDrop(bot_t* pBot, NSDeployableItem ItemToDeploy, const Ve
 
 void CommanderQueueInfantryPortalBuild(bot_t* pBot, int Priority)
 {
+	edict_t* ExistingInfantryPortal = UTIL_GetFirstPlacedStructureOfType(STRUCTURE_MARINE_INFANTRYPORTAL);
 
-	Vector CommChairLocation = UTIL_GetCommChairLocation();
+	Vector BuildLocation = ZERO_VECTOR;
 
-	if (!vEquals(CommChairLocation, ZERO_VECTOR))
+	// First see if we can place the next infantry portal next to the first one
+	if (!FNullEnt(ExistingInfantryPortal))
 	{
-		Vector NewInfantryPortalLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, CommChairLocation, UTIL_MetresToGoldSrcUnits(2.0f), UTIL_MetresToGoldSrcUnits(5.5f));
+		BuildLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, ExistingInfantryPortal->v.origin, UTIL_MetresToGoldSrcUnits(1.0f), UTIL_MetresToGoldSrcUnits(2.0f));
+	}
 
-		if (!vEquals(NewInfantryPortalLocation, ZERO_VECTOR))
+	// If not then find somewhere near the comm chair
+	if (BuildLocation == ZERO_VECTOR)
+	{
+		Vector CommChairLocation = UTIL_GetCommChairLocation();
+
+		if (CommChairLocation != ZERO_VECTOR)
 		{
-			int NewActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
+			Vector SearchPoint = ZERO_VECTOR;
 
-			if (NewActionIndex > -1)
+			const resource_node* ResNode = UTIL_FindNearestResNodeToLocation(CommChairLocation);
+			
+			if (ResNode)
 			{
-				UTIL_ClearCommanderAction(pBot, NewActionIndex, Priority);
-
-				commander_action* action = &pBot->CurrentCommanderActions[Priority][NewActionIndex];
-
-				action->bIsActive = true;
-				action->ActionType = ACTION_BUILD;
-				action->BuildLocation = NewInfantryPortalLocation;
-				action->StructureToBuild = STRUCTURE_MARINE_INFANTRYPORTAL;
+				SearchPoint = ResNode->origin;
 			}
+			else
+			{
+				SearchPoint = UTIL_GetRandomPointOfInterest();
+			}
+
+			Vector NearestPointToChair = FindClosestNavigablePointToDestination(BUILDING_REGULAR_NAV_PROFILE, SearchPoint, CommChairLocation, 100.0f);
+
+			if (NearestPointToChair != ZERO_VECTOR)
+			{
+				BuildLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, NearestPointToChair, UTIL_MetresToGoldSrcUnits(2.0f), UTIL_MetresToGoldSrcUnits(5.0f));
+
+			}
+			else
+			{
+				BuildLocation = UTIL_GetRandomPointOnNavmeshInRadius(BUILDING_REGULAR_NAV_PROFILE, CommChairLocation, UTIL_MetresToGoldSrcUnits(5.0f));
+			}
+		}
+		
+	}
+
+	if (BuildLocation != ZERO_VECTOR)
+	{
+		int NewActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
+
+		if (NewActionIndex > -1)
+		{
+			UTIL_ClearCommanderAction(pBot, NewActionIndex, Priority);
+
+			commander_action* action = &pBot->CurrentCommanderActions[Priority][NewActionIndex];
+
+			action->bIsActive = true;
+			action->ActionType = ACTION_BUILD;
+			action->BuildLocation = BuildLocation;
+			action->StructureToBuild = STRUCTURE_MARINE_INFANTRYPORTAL;
 		}
 	}
 }
 
 void CommanderQueueArmouryBuild(bot_t* pBot, int Priority)
 {
+	edict_t* InfantryPortal = UTIL_GetFirstPlacedStructureOfType(STRUCTURE_MARINE_INFANTRYPORTAL);
 
-	Vector CommChairLocation = UTIL_GetCommChairLocation();
+	if (FNullEnt(InfantryPortal)) { return; }
+	
+	Vector NewArmouryLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, InfantryPortal->v.origin, UTIL_MetresToGoldSrcUnits(3.0f), UTIL_MetresToGoldSrcUnits(5.0f));
 
-	if (!vEquals(CommChairLocation, ZERO_VECTOR))
+	if (NewArmouryLocation != ZERO_VECTOR)
 	{
-		Vector NewArmouryLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, CommChairLocation, UTIL_MetresToGoldSrcUnits(6.0f), UTIL_MetresToGoldSrcUnits(10.0f));
+		int NewActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
 
-		if (NewArmouryLocation != ZERO_VECTOR)
+		if (NewActionIndex > -1)
 		{
-			int NewActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
+			UTIL_ClearCommanderAction(pBot, NewActionIndex, Priority);
 
-			if (NewActionIndex > -1)
-			{
-				UTIL_ClearCommanderAction(pBot, NewActionIndex, Priority);
+			commander_action* action = &pBot->CurrentCommanderActions[Priority][NewActionIndex];
 
-				commander_action* action = &pBot->CurrentCommanderActions[Priority][NewActionIndex];
-
-				action->bIsActive = true;
-				action->ActionType = ACTION_BUILD;
-				action->BuildLocation = NewArmouryLocation;
-				action->StructureToBuild = STRUCTURE_MARINE_ARMOURY;
-			}
+			action->bIsActive = true;
+			action->ActionType = ACTION_BUILD;
+			action->BuildLocation = NewArmouryLocation;
+			action->StructureToBuild = STRUCTURE_MARINE_ARMOURY;
 		}
 	}
 }
 
 void CommanderQueueArmsLabBuild(bot_t* pBot, int Priority)
 {
-	Vector CommChairLocation = UTIL_GetCommChairLocation();
+	edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f), true);
 
-	if (!vEquals(CommChairLocation, ZERO_VECTOR))
+	if (FNullEnt(Armoury)) { return; }
+
+	Vector NewArmsLabLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, Armoury->v.origin, UTIL_MetresToGoldSrcUnits(3.0f), UTIL_MetresToGoldSrcUnits(5.0f));
+
+	if (NewArmsLabLocation != ZERO_VECTOR)
 	{
-		Vector NewArmsLabLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, CommChairLocation, UTIL_MetresToGoldSrcUnits(10.0f), UTIL_MetresToGoldSrcUnits(15.0f));
+		int NewActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
 
-		if (!vEquals(NewArmsLabLocation, ZERO_VECTOR))
+		if (NewActionIndex > -1)
 		{
-			int NewActionIndex = UTIL_CommanderFirstFreeActionIndex(pBot, Priority);
+			UTIL_ClearCommanderAction(pBot, NewActionIndex, Priority);
 
-			if (NewActionIndex > -1)
-			{
-				UTIL_ClearCommanderAction(pBot, NewActionIndex, Priority);
+			commander_action* action = &pBot->CurrentCommanderActions[Priority][NewActionIndex];
 
-				commander_action* action = &pBot->CurrentCommanderActions[Priority][NewActionIndex];
-
-				action->bIsActive = true;
-				action->ActionType = ACTION_BUILD;
-				action->BuildLocation = NewArmsLabLocation;
-				action->StructureToBuild = STRUCTURE_MARINE_ARMSLAB;
-			}
+			action->bIsActive = true;
+			action->ActionType = ACTION_BUILD;
+			action->BuildLocation = NewArmsLabLocation;
+			action->StructureToBuild = STRUCTURE_MARINE_ARMSLAB;
 		}
 	}
 }
@@ -1641,12 +1675,12 @@ bool BotCommanderSelectStructure(bot_t* pBot, const edict_t* Structure, int Acti
 	}
 
 	Vector CommanderViewOrigin = pBot->pEdict->v.origin;
-	CommanderViewOrigin.z = pBot->map_max_extent;
+	CommanderViewOrigin.z = GetCommanderViewZHeight();
 
 	if (action->DesiredCommanderLocation == ZERO_VECTOR || vDist2DSq(action->DesiredCommanderLocation, Structure->v.origin) > sqrf(UTIL_MetresToGoldSrcUnits(5.0f)))
 	{
 		
-		action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, UTIL_GetCentreOfEntity(Structure), pBot->map_max_extent);
+		action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, UTIL_GetCentreOfEntity(Structure), GetCommanderViewZHeight());
 
 		if (action->DesiredCommanderLocation == ZERO_VECTOR)
 		{
@@ -1957,12 +1991,12 @@ bool BotCommanderPlaceStructure(bot_t* pBot, int ActionIndex, int Priority)
 	pBot->pEdict->v.v_angle = ZERO_VECTOR;
 
 	Vector CommanderViewOrigin = pBot->pEdict->v.origin;
-	CommanderViewOrigin.z = pBot->map_max_extent;
+	CommanderViewOrigin.z = GetCommanderViewZHeight();
 
 	if (!action->DesiredCommanderLocation)
 	{
 		
-		action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, pBot->map_max_extent);
+		action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, GetCommanderViewZHeight());
 
 		if (action->DesiredCommanderLocation == ZERO_VECTOR)
 		{
@@ -1986,7 +2020,7 @@ bool BotCommanderPlaceStructure(bot_t* pBot, int ActionIndex, int Priority)
 		else
 		{
 			action->BuildLocation = UTIL_GetRandomPointOnNavmeshInRadius(BUILDING_REGULAR_NAV_PROFILE, action->BuildLocation, UTIL_MetresToGoldSrcUnits(2.0f));
-			action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, pBot->map_max_extent);
+			action->DesiredCommanderLocation = UTIL_FindClearCommanderOriginForBuild(pBot, action->BuildLocation, GetCommanderViewZHeight());
 		}
 	}
 
@@ -2013,7 +2047,6 @@ bool BotCommanderPlaceStructure(bot_t* pBot, int ActionIndex, int Priority)
 	pBot->impulse = UTIL_StructureTypeToImpulseCommand(action->StructureToBuild);
 
 	pBot->pEdict->v.button |= IN_ATTACK;
-
 
 	action->NumActionAttempts++;
 	action->bHasAttemptedAction = true;
@@ -2236,8 +2269,6 @@ void CommanderQueueRecycleAction(bot_t* pBot, edict_t* Structure, int Priority)
 
 void CommanderQueueNextAction(bot_t* pBot)
 {
-	//fprintf(pBot->logFile, "Commander Queue Action 1\n");
-	//fflush(pBot->logFile);
 
 	if ((gpGlobals->time - pBot->CommanderLastBeaconTime > 5.0f) && UTIL_BaseIsInDistress())
 	{
@@ -2249,51 +2280,41 @@ void CommanderQueueNextAction(bot_t* pBot)
 		}
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 2\n");
-	//fflush(pBot->logFile);
-
-	int NumPlacedOrQueuedPortals = UTIL_GetNumPlacedOrQueuedStructuresOfType(pBot, STRUCTURE_MARINE_INFANTRYPORTAL);
-	int InfPortalDeficit = min_infantry_portals - NumPlacedOrQueuedPortals;
-
-	//fprintf(pBot->logFile, "Commander Queue Action 3\n");
-	//fflush(pBot->logFile);
-
 	/* All the highest-priority tasks. Infantry portals, base armoury, arms lab, phase gate etc. */
 	int CurrentPriority = 0;
 
-	for (int i = 0; i < InfPortalDeficit; i++)
+	int NumPlacedOrQueuedPortals = UTIL_GetNumPlacedOrQueuedStructuresOfType(pBot, STRUCTURE_MARINE_INFANTRYPORTAL);
+
+	if (NumPlacedOrQueuedPortals < 2)
 	{
 		CommanderQueueInfantryPortalBuild(pBot, CurrentPriority);
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 4\n");
-	//fflush(pBot->logFile);
-
-	int ArmouryDeficit = min_armoury_in_base - (UTIL_GetQueuedBuildRequestsOfType(pBot, STRUCTURE_MARINE_ARMOURY) + (UTIL_GetStructureCountOfType(STRUCTURE_MARINE_ARMOURY) + UTIL_GetStructureCountOfType(STRUCTURE_MARINE_ADVARMOURY)));
-
-	for (int i = 0; i < ArmouryDeficit; i++)
+	if (!UTIL_StructureOfTypeExistsInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f)))
 	{
-		CommanderQueueArmouryBuild(pBot, CurrentPriority);
+		if (UTIL_GetQueuedBuildRequestsOfType(pBot, STRUCTURE_MARINE_ARMOURY) == 0)
+		{
+			CommanderQueueArmouryBuild(pBot, CurrentPriority);
+		}
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 5\n");
-	//fflush(pBot->logFile);
 
 	if (UTIL_ResearchIsComplete(RESEARCH_OBSERVATORY_PHASETECH))
 	{
 		if (UTIL_GetQueuedBuildRequestsOfType(pBot, STRUCTURE_MARINE_PHASEGATE) == 0 && !UTIL_StructureOfTypeExistsInLocation(STRUCTURE_MARINE_PHASEGATE, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f)))
 		{
-			Vector NewPhaseGateLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(5.0f), UTIL_MetresToGoldSrcUnits(10.0f));
+			edict_t* ExistingInfantryPortal = UTIL_GetFirstPlacedStructureOfType(STRUCTURE_MARINE_INFANTRYPORTAL);
 
-			if (NewPhaseGateLocation != ZERO_VECTOR)
+			if (!FNullEnt(ExistingInfantryPortal))
 			{
-				CommanderQueuePhaseGateBuild(pBot, NewPhaseGateLocation, CurrentPriority);
-			}
+				Vector NewPhaseGateLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, ExistingInfantryPortal->v.origin, UTIL_MetresToGoldSrcUnits(3.0f), UTIL_MetresToGoldSrcUnits(5.0f));
+
+				if (NewPhaseGateLocation != ZERO_VECTOR)
+				{
+					CommanderQueuePhaseGateBuild(pBot, NewPhaseGateLocation, CurrentPriority);
+				}
+			}			
 		}
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 6\n");
-	//fflush(pBot->logFile);
 
 	/* Next-highest priority tasks. Make sure we have at least 3 resource nodes. */
 	CurrentPriority = 1;
@@ -2304,9 +2325,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 	{
 		CommanderQueueResTowerBuild(pBot, CurrentPriority);
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 7\n");
-	//fflush(pBot->logFile);
 
 	/* Next-highest priority tasks. Secure one hive to deny it to aliens. */
 
@@ -2319,9 +2337,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 		QueueSecureHiveAction(pBot, UnbuiltHive->FloorLocation, CurrentPriority);
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 8\n");
-	//fflush(pBot->logFile);
-
 	/* Next-highest priority tasks. Place arms lab and do basic research including grenades, armour 1 and weapons 1*/
 
 	CurrentPriority = 3;
@@ -2331,32 +2346,20 @@ void CommanderQueueNextAction(bot_t* pBot)
 		CommanderQueueArmsLabBuild(pBot, CurrentPriority);
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 9\n");
-	//fflush(pBot->logFile);
-
 	if (UTIL_MarineResearchIsAvailable(RESEARCH_ARMOURY_GRENADES) && !UTIL_ResearchIsAlreadyQueued(pBot, RESEARCH_ARMOURY_GRENADES))
 	{
 		CommanderQueueResearch(pBot, RESEARCH_ARMOURY_GRENADES, CurrentPriority);
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 10\n");
-	//fflush(pBot->logFile);
 
 	if (UTIL_MarineResearchIsAvailable(RESEARCH_ARMSLAB_ARMOUR1) && !UTIL_ResearchIsAlreadyQueued(pBot, RESEARCH_ARMSLAB_ARMOUR1))
 	{
 		CommanderQueueResearch(pBot, RESEARCH_ARMSLAB_ARMOUR1, CurrentPriority);
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 11\n");
-	//fflush(pBot->logFile);
-
 	if (UTIL_MarineResearchIsAvailable(RESEARCH_ARMSLAB_WEAPONS1) && !UTIL_ResearchIsAlreadyQueued(pBot, RESEARCH_ARMSLAB_WEAPONS1))
 	{
 		CommanderQueueResearch(pBot, RESEARCH_ARMSLAB_WEAPONS1, CurrentPriority);
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 12\n");
-	//fflush(pBot->logFile);
 
 	/* Next up: Drop some shotguns and welders for the plebs */
 
@@ -2368,9 +2371,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 	{
 		DesiredNumShotguns = 4;
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 13\n");
-	//fflush(pBot->logFile);
 
 	if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_MARINE_RESTOWER) >= 4 && UTIL_ItemCanBeDeployed(ITEM_MARINE_SHOTGUN) && UTIL_GetNumWeaponsOfTypeInPlay(WEAPON_MARINE_SHOTGUN) < DesiredNumShotguns && UTIL_GetQueuedItemDropRequestsOfType(pBot, ITEM_MARINE_SHOTGUN) == 0)
 	{
@@ -2387,9 +2387,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 		}
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 14\n");
-	//fflush(pBot->logFile);
-
 	if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_MARINE_RESTOWER) >= min_desired_resource_towers && UTIL_ItemCanBeDeployed(ITEM_MARINE_WELDER) && UTIL_GetNumWeaponsOfTypeInPlay(WEAPON_MARINE_WELDER) < 2 && UTIL_GetQueuedItemDropRequestsOfType(pBot, ITEM_MARINE_WELDER) == 0)
 	{
 		edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(30.0f), true);
@@ -2405,41 +2402,36 @@ void CommanderQueueNextAction(bot_t* pBot)
 		}
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 15\n");
-	//fflush(pBot->logFile);
-
 	/* Next: Build an observatory and research phase tech and motion tracking */
 
 	CurrentPriority = 5;
 
 	if (UTIL_GetNumPlacedOrQueuedStructuresOfType(pBot, STRUCTURE_MARINE_OBSERVATORY) < 1)
 	{
-		Vector NewLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetCommChairLocation(), 10.0f, 15.0f);
+		edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true);
 
-		if (NewLocation != ZERO_VECTOR)
+		Vector NewLocation = ZERO_VECTOR;
+
+		if (!FNullEnt(Armoury))
 		{
-			UTIL_CommanderQueueStructureBuildAtLocation(pBot, NewLocation, STRUCTURE_MARINE_OBSERVATORY, CurrentPriority);
+			NewLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, Armoury->v.origin, UTIL_MetresToGoldSrcUnits(3.0f), UTIL_MetresToGoldSrcUnits(5.0f));
+
+			if (NewLocation != ZERO_VECTOR)
+			{
+				UTIL_CommanderQueueStructureBuildAtLocation(pBot, NewLocation, STRUCTURE_MARINE_OBSERVATORY, CurrentPriority);
+			}
 		}
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 16\n");
-	//fflush(pBot->logFile);
 
 	if (UTIL_MarineResearchIsAvailable(RESEARCH_OBSERVATORY_PHASETECH) && !UTIL_ResearchIsAlreadyQueued(pBot, RESEARCH_OBSERVATORY_PHASETECH))
 	{
 		CommanderQueueResearch(pBot, RESEARCH_OBSERVATORY_PHASETECH, CurrentPriority);
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 17\n");
-	//fflush(pBot->logFile);
-
 	if (UTIL_MarineResearchIsAvailable(RESEARCH_OBSERVATORY_MOTIONTRACKING) && !UTIL_ResearchIsAlreadyQueued(pBot, RESEARCH_OBSERVATORY_MOTIONTRACKING))
 	{
 		CommanderQueueResearch(pBot, RESEARCH_OBSERVATORY_MOTIONTRACKING, CurrentPriority);
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 18\n");
-	//fflush(pBot->logFile);
 
 	/* Next: Armour and Weapons 2 */
 
@@ -2455,10 +2447,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 		CommanderQueueResearch(pBot, RESEARCH_ARMSLAB_WEAPONS2, CurrentPriority);
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 19\n");
-	//fflush(pBot->logFile);
-
-
 	/* Next: Heavy armour and weapons */
 
 	CurrentPriority = 7;
@@ -2473,9 +2461,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 		}
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 20\n");
-	//fflush(pBot->logFile);
-
 	if (UTIL_GetStructureCountOfType(STRUCTURE_MARINE_ADVARMOURY) > 0 && UTIL_GetStructureCountOfType(STRUCTURE_MARINE_ARMSLAB) > 0)
 	{
 		if (UTIL_GetNumPlacedOrQueuedStructuresOfType(pBot, STRUCTURE_MARINE_PROTOTYPELAB) < 1)
@@ -2486,31 +2471,20 @@ void CommanderQueueNextAction(bot_t* pBot)
 
 			if (!FNullEnt(Armoury))
 			{
-				NewLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, Armoury->v.origin, 3.0f, 5.0f);
-			}
-			else
-			{
-				NewLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, UTIL_GetCommChairLocation(), 8.0f, 15.0f);
-			}
+				NewLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, Armoury->v.origin, UTIL_MetresToGoldSrcUnits(3.0f), UTIL_MetresToGoldSrcUnits(5.0f));
 
-
-			if (NewLocation != ZERO_VECTOR)
-			{
-				UTIL_CommanderQueueStructureBuildAtLocation(pBot, NewLocation, STRUCTURE_MARINE_PROTOTYPELAB, CurrentPriority);
+				if (NewLocation != ZERO_VECTOR)
+				{
+					UTIL_CommanderQueueStructureBuildAtLocation(pBot, NewLocation, STRUCTURE_MARINE_PROTOTYPELAB, CurrentPriority);
+				}
 			}
 		}
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 21\n");
-	//fflush(pBot->logFile);
 
 	if (UTIL_MarineResearchIsAvailable(RESEARCH_PROTOTYPELAB_HEAVYARMOUR) && !UTIL_ResearchIsAlreadyQueued(pBot, RESEARCH_PROTOTYPELAB_HEAVYARMOUR))
 	{
 		CommanderQueueResearch(pBot, RESEARCH_PROTOTYPELAB_HEAVYARMOUR, CurrentPriority);
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 22\n");
-	//fflush(pBot->logFile);
 
 	/* Next: Drop heavy armour loadouts */
 
@@ -2528,31 +2502,19 @@ void CommanderQueueNextAction(bot_t* pBot)
 		}
 	}
 
-	//fprintf(pBot->logFile, "Commander Queue Action 23\n");
-	//fflush(pBot->logFile);
-
 	/* Now siege a hive */
 
 	CurrentPriority = 9;
 
 	if (UTIL_ResearchIsComplete(RESEARCH_OBSERVATORY_PHASETECH) && UTIL_StructureOfTypeExistsInLocation(STRUCTURE_MARINE_PHASEGATE, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f)))
 	{
-		//fprintf(pBot->logFile, "Commander Queue Action 23.1\n");
-		//fflush(pBot->logFile);
 		const hive_definition* NearestBuildHive = UTIL_GetNearestBuiltHiveToLocation(UTIL_GetCommChairLocation());
 
 		if (NearestBuildHive)
 		{
-			//fprintf(pBot->logFile, "Commander Queue Action 23.2\n");
-			//fflush(pBot->logFile);
 			QueueSiegeHiveAction(pBot, NearestBuildHive->FloorLocation, CurrentPriority);
-			//fprintf(pBot->logFile, "Commander Queue Action 23.3\n");
-			//fflush(pBot->logFile);
 		}
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 24\n");
-	//fflush(pBot->logFile);
 
 	/* Last: everything else */
 
@@ -2567,9 +2529,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 	{
 		CommanderQueueResearch(pBot, RESEARCH_ARMSLAB_WEAPONS3, CurrentPriority);
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 25\n");
-	//fflush(pBot->logFile);
 	
 	/* Optional: grab any empty nodes with marines standing by them waiting to cap */
 
@@ -2592,10 +2551,6 @@ void CommanderQueueNextAction(bot_t* pBot)
 			pBot->CurrentCommanderActions[NewPriority][FreeActionIndex].StructureToBuild = STRUCTURE_MARINE_RESTOWER;
 		}
 	}
-
-	//fprintf(pBot->logFile, "Commander Queue Action 26\n");
-	//fflush(pBot->logFile);
-
 }
 
 int UTIL_FindFreeResNodeWithMarineNearby(bot_t* CommanderBot)

@@ -47,6 +47,8 @@ extern int NumTotalHives;
 extern map_location MapLocations[32];
 extern int NumMapLocations;
 
+extern float CommanderViewZHeight;
+
 extern bot_t bots[32];
 
 extern bool bGameIsActive;
@@ -364,7 +366,7 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "testattack"))
+	if (FStrEq(pcmd, "testphasepath"))
 	{
 		if (!NavmeshLoaded())
 		{
@@ -372,42 +374,16 @@ void ClientCommand(edict_t *pEntity)
 			RETURN_META(MRES_SUPERCEDE);
 		}
 
-		edict_t* PhaseGate = UTIL_GetFirstCompletedStructureOfType(STRUCTURE_MARINE_PHASEGATE);
+		bot_path_node TestPath[MAX_PATH_SIZE];
+		int TestPathSize = 0;
 
-		if (!FNullEnt(PhaseGate))
+		dtStatus PhaseFind = FindPhaseGatePathToPoint(MARINE_REGULAR_NAV_PROFILE, pEntity->v.origin, UTIL_GetCommChairLocation(), TestPath, &TestPathSize, 60.0f);
+
+		if (dtStatusSucceed(PhaseFind))
 		{
-			for (int i = 0; i < gpGlobals->maxClients; i++)
-			{
-				if (bots[i].is_used)  // not respawning
-				{
-					bots[i].PrimaryBotTask.TaskType = TASK_ATTACK;
-					bots[i].PrimaryBotTask.TaskLocation = PhaseGate->v.origin;
-					bots[i].PrimaryBotTask.TaskTarget = PhaseGate;
-					bots[i].PrimaryBotTask.bOrderIsUrgent = true;
-				}
-			}
+			DEBUG_DrawPath(TestPath, TestPathSize, 20.0f);
 		}
 
-		
-		RETURN_META(MRES_SUPERCEDE);
-	}
-
-	if (FStrEq(pcmd, "testbeacon"))
-	{
-		
-		for (int i = 0; i < gpGlobals->maxClients; i++)
-		{
-			if (bots[i].is_used)  // not respawning
-			{
-				if (bots[i].bot_ns_class == CLASS_MARINE_COMMANDER)
-				{
-					if (UTIL_MarineResearchIsAvailable(RESEARCH_OBSERVATORY_DISTRESSBEACON))
-					{
-						CommanderQueueResearch(&bots[i], RESEARCH_OBSERVATORY_DISTRESSBEACON, 0);
-					}
-				}
-			}
-		}
 		
 		RETURN_META(MRES_SUPERCEDE);
 	}
@@ -439,10 +415,11 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "testbackwardspath"))
+	if (FStrEq(pcmd, "mymovedir"))
 	{
-		DEBUG_TestBackwardsPathFind(pEntity, UTIL_GetCommChairLocation());
-
+		char buf[32];
+		sprintf(buf, "%s\n", (pEntity->v.button & IN_FORWARD) ? "True" : "False");
+		UTIL_SayText(buf, pEntity);
 
 
 		RETURN_META(MRES_SUPERCEDE);
@@ -510,6 +487,10 @@ void ClientCommand(edict_t *pEntity)
 
 			sprintf(buf, "Distance: %f\n", (1000.0f * Hit.flFraction));
 			UTIL_SayText(buf, pEntity);
+
+			sprintf(buf, "Height: %f\n", (Hit.pHit->v.size.z));
+			UTIL_SayText(buf, pEntity);
+
 		}
 		else
 		{
@@ -695,7 +676,7 @@ void ClientCommand(edict_t *pEntity)
 				UTIL_SayText(buf, listenserver_edict);
 			}
 
-			UTIL_DrawLine(clients[0], pBot->CurrentEyePosition, pBot->CurrentTask->TaskLocation, 10.0f, 255, 255, 0);
+			UTIL_DrawLine(clients[0], pBot->CurrentEyePosition, pBot->CurrentTask->TaskLocation, 20.0f, 255, 255, 0);
 		}
 		else
 		{

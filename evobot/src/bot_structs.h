@@ -296,8 +296,6 @@ typedef struct _BOT_T
 
 	bot_skill BotSkillSettings;
 
-	float map_max_extent = 0.0f; // The commander's Z height when in top-down view. Set by the SetupMap network message
-
 	int respawn_state = 0;
 	edict_t* pEdict = NULL;
 	char name[BOT_NAME_LEN + 1];

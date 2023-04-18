@@ -649,10 +649,7 @@ void BotClient_NS_SetupMap(void* p, int bot_index)
 	{
 		if (!IsLocation)
 		{
-			if (bot_index > 0)
-			{
-				bots[bot_index].map_max_extent = *(float*)p;
-			}
+			SetCommanderViewZHeight(*(float*)p);
 		}
 		else
 		{
@@ -737,11 +734,13 @@ void BotClient_NS_DeathMsg(void *p, int bot_index)
 		 bot_t* botVictim = UTIL_GetBotPointer(victim_edict);
 		 bot_t* botKiller = UTIL_GetBotPointer(killer_edict);
 
-		 if (botVictim) {
+		 if (botVictim)
+		 {
 			 BotDied(botVictim, killer_edict);
 		 }
 
-		 if (botKiller) {
+		 if (botKiller)
+		 {
 			 BotKilledPlayer(botKiller, victim_edict);
 		 }
 
