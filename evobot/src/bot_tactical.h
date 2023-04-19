@@ -191,7 +191,7 @@ const resource_node* UTIL_MarineFindUnclaimedResNodeNearestLocation(const bot_t*
 const resource_node* UTIL_AlienFindUnclaimedResNodeFurthestFromLocation(const bot_t* pBot, const Vector& Location, bool bIgnoreElectrified);
 
 edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const NSStructureType StructureType);
-edict_t* UTIL_GetNearestStructureOfTypeInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius, bool bAllowElectrified);
+edict_t* UTIL_GetNearestStructureOfTypeInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius, bool bAllowElectrified, bool bUsePhaseDistance);
 edict_t* UTIL_GetNearestUnbuiltStructureOfTypeInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius);
 bool UTIL_StructureOfTypeExistsInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius);
 
@@ -199,6 +199,8 @@ edict_t* UTIL_GetAnyStructureOfTypeNearActiveHive(const NSStructureType Structur
 edict_t* UTIL_GetAnyStructureOfTypeNearUnbuiltHive(const NSStructureType StructureType, bool bAllowElectrical);
 
 const resource_node* UTIL_GetNearestCappedResNodeToLocation(const Vector Location, int Team, bool bIgnoreElectrified);
+
+edict_t* UTIL_GetRandomStructureOfType(const NSStructureType StructureType, const edict_t* IgnoreInstance, bool bFullyConstructedOnly);
 
 bool UTIL_CommChairExists();
 Vector UTIL_GetCommChairLocation();
@@ -226,9 +228,10 @@ bool UTIL_AnyPlayerOnTeamWithLOS(const Vector& Location, const int Team, float S
 
 edict_t* UTIL_GetClosestPlayerOnTeamWithLOS(const Vector& Location, const int Team, float SearchRadius);
 
-edict_t* UTIL_FindClosestMarineStructureUnbuilt(const Vector& SearchLocation, float SearchRadius);
-edict_t* UTIL_FindClosestMarineStructureOfTypeUnbuilt(const NSStructureType StructureType, const Vector& SearchLocation, float SearchRadius);
-edict_t* UTIL_FindClosestDamagedStructure(const Vector& SearchLocation, const int Team, float SearchRadius);
+edict_t* UTIL_FindClosestMarineStructureUnbuilt(const Vector& SearchLocation, float SearchRadius, bool bUsePhaseDistance);
+edict_t* UTIL_FindClosestMarineStructureUnbuiltWithoutBuilders(bot_t* pBot, const int MaxBuilders, const Vector& SearchLocation, float SearchRadius, bool bUsePhaseDistance);
+edict_t* UTIL_FindClosestMarineStructureOfTypeUnbuilt(const NSStructureType StructureType, const Vector& SearchLocation, float SearchRadius, bool bUsePhaseDistance);
+edict_t* UTIL_FindClosestDamagedStructure(const Vector& SearchLocation, const int Team, float SearchRadius, bool bUsePhaseDistance);
 edict_t* UTIL_FindMarineWithDamagedArmour(const Vector& SearchLocation, float SearchRadius, edict_t* IgnoreEdict);
 
 HiveStatusType UTIL_GetHiveStatus(const edict_t* Hive);
@@ -270,6 +273,7 @@ edict_t* UTIL_GetClosestPlayerNeedsHealing(const Vector Location, const int Team
 
 // Looks for any offence chambers or marine turrets that are a threat to the bot
 edict_t* BotGetNearestDangerTurret(bot_t* pBot, float MaxDistance);
+edict_t* PlayerGetNearestDangerTurret(const edict_t* Player, float MaxDistance);
 
 // Checks if the item lying on the floor is a primary weapon (MG, HMG, GL, Shotgun)
 bool UTIL_DroppedItemIsPrimaryWeapon(NSDeployableItem ItemType);
@@ -278,6 +282,8 @@ bool UTIL_DroppedItemIsPrimaryWeapon(NSDeployableItem ItemType);
 bool UTIL_IsMarineStructure(const edict_t* Structure);
 // Is the input edict a valid alien structure?
 bool UTIL_IsAlienStructure(const edict_t* Structure);
+
+bool UTIL_AnyTurretWithLOSToLocation(const Vector Location, const int TurretTeam);
 
 // Is the input structure type a marine structure?
 bool UTIL_IsMarineStructure(const NSStructureType StructureType);

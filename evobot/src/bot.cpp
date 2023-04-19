@@ -388,8 +388,8 @@ char* UTIL_BotRoleToChar(const BotRole Role)
 			return "Destroyer";
 		case BOT_ROLE_FIND_RESOURCES:
 			return "Find Resources";
-		case BOT_ROLE_GUARD_BASE:
-			return "Guard Base";
+		case BOT_ROLE_SWEEPER:
+			return "Sweeper";
 		case BOT_ROLE_HARASS:
 			return "Harasser";
 		case BOT_ROLE_NONE:
@@ -3574,7 +3574,8 @@ void AlienBuilderSetPrimaryTask(bot_t* pBot, bot_task* Task)
 		}
 	}
 
-	const resource_node* NearestUnprotectedResNode = UTIL_GetNearestUnprotectedResNode(pBot->pEdict->v.origin);
+	// Reinforce resource nodes which are closest to the marine base to start boxing them in and denying them access to the rest of the map
+	const resource_node* NearestUnprotectedResNode = UTIL_GetNearestUnprotectedResNode(UTIL_GetCommChairLocation());
 
 	if (NearestUnprotectedResNode)
 	{
@@ -3660,7 +3661,7 @@ bool UTIL_BotWithBuildTaskExists(NSStructureType StructureType)
 
 void AlienHarasserSetSecondaryTask(bot_t* pBot, bot_task* Task)
 {
-	edict_t* PhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(20.0f), !IsPlayerSkulk(pBot->pEdict));
+	edict_t* PhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(20.0f), !IsPlayerSkulk(pBot->pEdict), false);
 
 	if (PhaseGate)
 	{
@@ -3676,7 +3677,7 @@ void AlienHarasserSetSecondaryTask(bot_t* pBot, bot_task* Task)
 		}
 	}
 
-	edict_t* TurretFactory = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(20.0f), !IsPlayerSkulk(pBot->pEdict));
+	edict_t* TurretFactory = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, pBot->pEdict->v.origin, UTIL_MetresToGoldSrcUnits(20.0f), !IsPlayerSkulk(pBot->pEdict), false);
 
 	if (TurretFactory)
 	{
@@ -3876,8 +3877,8 @@ void BotMarineSetSecondaryTask(bot_t* pBot, bot_task* Task)
 
 	switch (pBot->CurrentRole)
 	{
-	case BOT_ROLE_GUARD_BASE:
-		MarineGuardSetSecondaryTask(pBot, Task);
+	case BOT_ROLE_SWEEPER:
+		MarineSweeperSetSecondaryTask(pBot, Task);
 		return;
 	case BOT_ROLE_FIND_RESOURCES:
 		MarineCapperSetSecondaryTask(pBot, Task);
@@ -3903,8 +3904,8 @@ void BotMarineSetPrimaryTask(bot_t* pBot, bot_task* Task)
 
 	switch (pBot->CurrentRole)
 	{
-	case BOT_ROLE_GUARD_BASE:
-		MarineGuardSetPrimaryTask(pBot, Task);
+	case BOT_ROLE_SWEEPER:
+		MarineSweeperSetPrimaryTask(pBot, Task);
 		return;
 	case BOT_ROLE_FIND_RESOURCES:
 		MarineCapperSetPrimaryTask(pBot, Task);
@@ -4171,24 +4172,11 @@ bool UTIL_IsBuildTaskStillValid(bot_t* pBot, bot_task* Task)
 
 	if (!Task->bIssuedByCommander)
 	{
+		int NumBuilders = UTIL_GetNumPlayersOfTeamInArea(Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(2.0f), MARINE_TEAM, pBot->pEdict, CLASS_MARINE_COMMANDER, false);
 
-		if (pBot->CurrentRole != BOT_ROLE_GUARD_BASE && vDist2DSq(Task->TaskTarget->v.origin, UTIL_GetCommChairLocation()) < sqrf(UTIL_MetresToGoldSrcUnits(20.0f)))
+		if (NumBuilders >= 2)
 		{
-			edict_t* NearestPlayer = UTIL_GetNearestPlayerOfTeamInArea(Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(10.0f), MARINE_TEAM, pBot->pEdict, CLASS_MARINE_COMMANDER);
-
-			if (NearestPlayer && vDist2DSq(NearestPlayer->v.origin, Task->TaskTarget->v.origin) < vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin))
-			{
-				return false;
-			}
-		}
-		else
-		{
-			int NumBuilders = UTIL_GetNumPlayersOfTeamInArea(Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(2.0f), MARINE_TEAM, pBot->pEdict, CLASS_MARINE_COMMANDER, false);
-
-			if (NumBuilders >= 2 && vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin) > sqrf(UTIL_MetresToGoldSrcUnits(2.0f)))
-			{
-				return false;
-			}
+			return false;
 		}
 	}
 
@@ -5059,27 +5047,17 @@ void BotProgressResupplyTask(bot_t* pBot, bot_task* Task)
 		pBot->DesiredCombatWeapon = UTIL_GetBotMarineSecondaryWeapon(pBot);
 	}
 
-	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Task->TaskTarget, max_player_use_reach, true))
+	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Task->TaskTarget, max_player_use_reach, false))
 	{
 		BotUseObject(pBot, Task->TaskTarget, true);
-
+		if (vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin) > sqrf(50.0f))
+		{
+			MoveDirectlyTo(pBot, Task->TaskTarget->v.origin);
+		}
 		return;
 	}
 
-	Vector UseLocation = pBot->BotNavInfo.TargetDestination;
-
-	if (!UseLocation || vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin) > sqrf(UTIL_MetresToGoldSrcUnits(1.0f)))
-	{
-		int MoveProfile = UTIL_GetMoveProfileForBot(pBot, MOVESTYLE_NORMAL);
-		UseLocation = UTIL_GetRandomPointOnNavmeshInRadius(MoveProfile, Task->TaskTarget->v.origin, UTIL_MetresToGoldSrcUnits(1.0f));
-
-		if (!UseLocation)
-		{
-			UseLocation = Task->TaskTarget->v.origin;
-		}
-	}
-
-	MoveTo(pBot, UseLocation, MOVESTYLE_NORMAL);
+	MoveTo(pBot, Task->TaskTarget->v.origin, MOVESTYLE_NORMAL);
 
 	if (vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin) < sqrf(UTIL_MetresToGoldSrcUnits(5.0f)))
 	{
@@ -5108,9 +5086,22 @@ void BotProgressBuildTask(bot_t* pBot, bot_task* Task)
 		}
 	}
 
+	// If someone else is building, then we will guard
+	edict_t* OtherBuilder = UTIL_GetClosestPlayerOnTeamWithLOS(Task->TaskLocation, MARINE_TEAM, UTIL_MetresToGoldSrcUnits(2.0f));
+
+	if (!FNullEnt(OtherBuilder) && OtherBuilder != pBot->pEdict)
+	{
+		BotGuardLocation(pBot, Task->TaskLocation);
+		return;
+	}
+
 	if (UTIL_PlayerHasLOSToEntity(pBot->pEdict, Task->TaskTarget, max_player_use_reach, false))
 	{
 		BotUseObject(pBot, Task->TaskTarget, true);
+		if (vDist2DSq(pBot->pEdict->v.origin, Task->TaskTarget->v.origin) > sqrf(50.0f))
+		{
+			MoveDirectlyTo(pBot, Task->TaskTarget->v.origin);
+		}
 		return;
 	}
 
@@ -5290,6 +5281,10 @@ bool UTIL_StructureTypesMatch(const NSStructureType TypeOne, const NSStructureTy
 			 || (TypeTwo == STRUCTURE_MARINE_ANYARMOURY && (TypeOne == STRUCTURE_MARINE_ARMOURY || TypeOne == STRUCTURE_MARINE_ADVARMOURY))
 			 || (TypeTwo == STRUCTURE_MARINE_ANYTURRETFACTORY && (TypeOne == STRUCTURE_MARINE_TURRETFACTORY || TypeOne == STRUCTURE_MARINE_ADVTURRETFACTORY))
 			 || (TypeTwo == STRUCTURE_MARINE_ANYTURRET && (TypeOne == STRUCTURE_MARINE_TURRET || TypeOne == STRUCTURE_MARINE_SIEGETURRET))
+			 || (TypeOne == STRUCTURE_ANY_MARINE_STRUCTURE && UTIL_IsMarineStructure(TypeTwo))
+			 || (UTIL_IsMarineStructure(TypeOne) && TypeTwo == STRUCTURE_ANY_MARINE_STRUCTURE)
+			 || (TypeOne == STRUCTURE_ANY_ALIEN_STRUCTURE && UTIL_IsAlienStructure(TypeTwo))
+			 || (UTIL_IsAlienStructure(TypeOne) && TypeTwo == STRUCTURE_ANY_ALIEN_STRUCTURE)
 		);
 }
 
@@ -6987,35 +6982,6 @@ void AssignCommander()
 	if (closestBot)
 	{
 		closestBot->CurrentRole = BOT_ROLE_COMMAND;
-	}
-}
-
-void AssignGuardBot()
-{
-	Vector CommChairLocation = UTIL_GetCommChairLocation();
-
-	if (vEquals(CommChairLocation, ZERO_VECTOR)) { return; }
-
-	bot_t* closestBot = nullptr;
-	float nearestDist;
-
-	for (int i = 0; i < 32; i++)
-	{
-		if (bots[i].is_used && !FNullEnt(bots[i].pEdict) && (bots[i].CurrentRole != BOT_ROLE_COMMAND) && IsPlayerOnMarineTeam(bots[i].pEdict) && !IsPlayerDead(bots[i].pEdict) && !IsPlayerBeingDigested(bots[i].pEdict))
-		{
-			float dist = vDist2DSq(bots[i].pEdict->v.origin, CommChairLocation);
-			if (!closestBot || dist < nearestDist)
-			{
-				closestBot = &bots[i];
-				nearestDist = dist;
-			}
-		}
-	}
-
-	if (closestBot)
-	{
-		closestBot->CurrentRole = BOT_ROLE_GUARD_BASE;
-		UTIL_ClearGuardInfo(closestBot);
 	}
 }
 

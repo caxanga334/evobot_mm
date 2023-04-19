@@ -29,11 +29,13 @@ void MarineCheckWantsAndNeeds(bot_t* pBot);
 void MarineProgressCapResNodeTask(bot_t* pBot, bot_task* Task);
 void MarineProgressWeldTask(bot_t* pBot, bot_task* Task);
 
-void MarineGuardSetPrimaryTask(bot_t* pBot, bot_task* Task);
+void MarineSetSecondaryTask(bot_t* pBot, bot_task* Task);
+
+void MarineSweeperSetPrimaryTask(bot_t* pBot, bot_task* Task);
 void MarineCapperSetPrimaryTask(bot_t* pBot, bot_task* Task);
 void MarineAssaultSetPrimaryTask(bot_t* pBot, bot_task* Task);
 
-void MarineGuardSetSecondaryTask(bot_t* pBot, bot_task* Task);
+void MarineSweeperSetSecondaryTask(bot_t* pBot, bot_task* Task);
 void MarineCapperSetSecondaryTask(bot_t* pBot, bot_task* Task);
 void MarineAssaultSetSecondaryTask(bot_t* pBot, bot_task* Task);
 

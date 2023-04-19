@@ -604,7 +604,6 @@ bool UTIL_IsAnyHumanOnAlienTeam();
 void UTIL_GenerateGuardWatchPoints(bot_t* pBot, const Vector& GuardLocation);
 
 void AssignCommander();
-void AssignGuardBot();
 
 bool UTIL_BotCanReload(bot_t* pBot);
 

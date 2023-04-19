@@ -149,8 +149,8 @@ bool CommanderProgressBuildAction(bot_t* CommanderBot, int ActionIndex, int Prio
 
 		bool IsAlienNearby = UTIL_AnyPlayerOnTeamWithLOS(action->BuildLocation, ALIEN_TEAM, UTIL_MetresToGoldSrcUnits(10.0f));
 
-		// If a marine is ready to build, and there isn't an alien around, then go for it
-		if (IsMarineNearby && !IsAlienNearby)
+		// If a marine is ready to build, and there isn't an alien around or offence chamber that could attack it, then go for it
+		if (IsMarineNearby && !IsAlienNearby && !UTIL_AnyTurretWithLOSToLocation(action->BuildLocation, ALIEN_TEAM))
 		{
 			// Otherwise, move to the location and put it down
 			return BotCommanderPlaceStructure(CommanderBot, ActionIndex, Priority);
@@ -196,7 +196,7 @@ bool CommanderProgressBuildAction(bot_t* CommanderBot, int ActionIndex, int Prio
 
 		if (NewAssignedPlayer > -1)
 		{
-			if (IsPlayerHuman(clients[NewAssignedPlayer]) || !(UTIL_GetBotPointer(clients[NewAssignedPlayer])) || UTIL_GetBotPointer(clients[NewAssignedPlayer])->CurrentRole != BOT_ROLE_GUARD_BASE)
+			if (IsPlayerHuman(clients[NewAssignedPlayer]) || !(UTIL_GetBotPointer(clients[NewAssignedPlayer])) || UTIL_GetBotPointer(clients[NewAssignedPlayer])->CurrentRole != BOT_ROLE_SWEEPER)
 			{
 				action->AssignedPlayer = NewAssignedPlayer;
 				return UTIL_IssueOrderForAction(CommanderBot, NewAssignedPlayer, ActionIndex, Priority);
@@ -283,7 +283,7 @@ bool BotCommanderDropItem(bot_t* pBot, int ActionIndex, int Priority)
 	{
 		if (UTIL_GetStructureTypeFromEdict(pBot->CommanderCurrentlySelectedBuilding) != STRUCTURE_MARINE_OBSERVATORY)
 		{
-			return BotCommanderSelectStructure(pBot, UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_OBSERVATORY, action->BuildLocation, UTIL_MetresToGoldSrcUnits(1000.0f), true), ActionIndex, Priority);
+			return BotCommanderSelectStructure(pBot, UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_OBSERVATORY, action->BuildLocation, UTIL_MetresToGoldSrcUnits(1000.0f), true, false), ActionIndex, Priority);
 		}
 	}
 
@@ -893,7 +893,7 @@ void CommanderQueueArmouryBuild(bot_t* pBot, int Priority)
 
 void CommanderQueueArmsLabBuild(bot_t* pBot, int Priority)
 {
-	edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f), true);
+	edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f), true, false);
 
 	if (FNullEnt(Armoury)) { return; }
 
@@ -1278,20 +1278,20 @@ bool UTIL_CommanderBuildActionIsValid(bot_t* CommanderBot, commander_action* Act
 	{
 		case STRUCTURE_MARINE_ARMOURY:
 		case STRUCTURE_MARINE_ADVARMOURY:
-			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f), true) == nullptr);
+			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f), true, false) == nullptr);
 		case STRUCTURE_MARINE_TURRETFACTORY:
 		case STRUCTURE_MARINE_ADVTURRETFACTORY:
-			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f), true) == nullptr);
+			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f), true, false) == nullptr);
 		case STRUCTURE_MARINE_PHASEGATE:
-			return (UTIL_StructureExistsOfType(STRUCTURE_MARINE_OBSERVATORY) && UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f), true) == nullptr);
+			return (UTIL_StructureExistsOfType(STRUCTURE_MARINE_OBSERVATORY) && UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(10.0f), true, false) == nullptr);
 		case STRUCTURE_MARINE_OBSERVATORY:
 		case STRUCTURE_MARINE_ARMSLAB:
 		case STRUCTURE_MARINE_PROTOTYPELAB:
 			return !UTIL_StructureExistsOfType(Action->StructureToBuild);
 		case STRUCTURE_MARINE_TURRET:
-			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(5.0f), true) != nullptr);
+			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(5.0f), true, false) != nullptr);
 		case STRUCTURE_MARINE_SIEGETURRET:
-			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ADVTURRETFACTORY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(5.0f), true) != nullptr);
+			return (UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ADVTURRETFACTORY, Action->BuildLocation, UTIL_MetresToGoldSrcUnits(5.0f), true, false) != nullptr);
 		default:
 			return true;
 	}
@@ -2374,7 +2374,7 @@ void CommanderQueueNextAction(bot_t* pBot)
 
 	if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_MARINE_RESTOWER) >= 4 && UTIL_ItemCanBeDeployed(ITEM_MARINE_SHOTGUN) && UTIL_GetNumWeaponsOfTypeInPlay(WEAPON_MARINE_SHOTGUN) < DesiredNumShotguns && UTIL_GetQueuedItemDropRequestsOfType(pBot, ITEM_MARINE_SHOTGUN) == 0)
 	{
-		edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(30.0f), true);
+		edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(30.0f), true, false);
 
 		if (!FNullEnt(NearestArmoury))
 		{
@@ -2389,7 +2389,7 @@ void CommanderQueueNextAction(bot_t* pBot)
 
 	if (UTIL_GetNumPlacedStructuresOfType(STRUCTURE_MARINE_RESTOWER) >= min_desired_resource_towers && UTIL_ItemCanBeDeployed(ITEM_MARINE_WELDER) && UTIL_GetNumWeaponsOfTypeInPlay(WEAPON_MARINE_WELDER) < 2 && UTIL_GetQueuedItemDropRequestsOfType(pBot, ITEM_MARINE_WELDER) == 0)
 	{
-		edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(30.0f), true);
+		edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(30.0f), true, false);
 
 		if (!FNullEnt(NearestArmoury))
 		{
@@ -2408,7 +2408,7 @@ void CommanderQueueNextAction(bot_t* pBot)
 
 	if (UTIL_GetNumPlacedOrQueuedStructuresOfType(pBot, STRUCTURE_MARINE_OBSERVATORY) < 1)
 	{
-		edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true);
+		edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true, false);
 
 		Vector NewLocation = ZERO_VECTOR;
 
@@ -2453,7 +2453,7 @@ void CommanderQueueNextAction(bot_t* pBot)
 
 	if (UTIL_GetStructureCountOfType(STRUCTURE_MARINE_ADVARMOURY) < 1 && UTIL_GetQueuedUpgradeRequestsOfType(pBot, STRUCTURE_MARINE_ARMOURY) < 1)
 	{
-		edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true);
+		edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true, false);
 
 		if (!FNullEnt(Armoury) && UTIL_StructureCanBeUpgraded(Armoury))
 		{
@@ -2465,7 +2465,7 @@ void CommanderQueueNextAction(bot_t* pBot)
 	{
 		if (UTIL_GetNumPlacedOrQueuedStructuresOfType(pBot, STRUCTURE_MARINE_PROTOTYPELAB) < 1)
 		{
-			edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true);
+			edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f), true, false);
 
 			Vector NewLocation = ZERO_VECTOR;
 
@@ -2592,8 +2592,8 @@ commander_action* UTIL_FindCommanderBuildActionOfType(bot_t* pBot, const NSStruc
 
 void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 {
-	edict_t* PhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(30.0f), true);
-	edict_t* TurretFactory = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Area, UTIL_MetresToGoldSrcUnits(20.0f), true);
+	edict_t* PhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(30.0f), true, false);
+	edict_t* TurretFactory = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Area, UTIL_MetresToGoldSrcUnits(20.0f), true, false);
 
 	int NumCompletedSiegeTurrets = UTIL_GetNumBuiltStructuresOfTypeInRadius(STRUCTURE_MARINE_SIEGETURRET, Area, UTIL_MetresToGoldSrcUnits(20.0f));
 
@@ -2617,7 +2617,14 @@ void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 		edict_t* NearbyMarine = UTIL_GetNearestPlayerOfTeamInArea(Area, UTIL_MetresToGoldSrcUnits(20.0f), MARINE_TEAM, nullptr, CLASS_NONE);
 		commander_action* ExistingAction = UTIL_FindCommanderBuildActionOfType(CommanderBot, STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(20.0f));
 
-		if (!FNullEnt(NearbyMarine) && vDist2DSq(NearbyMarine->v.origin, Area) > sqrf(UTIL_MetresToGoldSrcUnits(10.0f)) && !UTIL_PlayerHasLOSToEntity(NearbyMarine, HiveIndex->edict, UTIL_MetresToGoldSrcUnits(20.0f), false))
+		edict_t* DangerTurret = nullptr;
+
+		if (!FNullEnt(NearbyMarine))
+		{
+			DangerTurret = PlayerGetNearestDangerTurret(NearbyMarine, UTIL_MetresToGoldSrcUnits(15.0f));
+		}
+
+		if (!FNullEnt(NearbyMarine) && FNullEnt(DangerTurret) && vDist2DSq(NearbyMarine->v.origin, Area) > sqrf(UTIL_MetresToGoldSrcUnits(10.0f)) && !UTIL_PlayerHasLOSToEntity(NearbyMarine, HiveIndex->edict, UTIL_MetresToGoldSrcUnits(20.0f), false))
 		{
 			Vector BuildLocation = UTIL_ProjectPointToNavmesh(NearbyMarine->v.origin, Vector(100.0f, 50.0f, 100.0f), BUILDING_REGULAR_NAV_PROFILE);
 			
@@ -2661,7 +2668,7 @@ void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 
 	if (FNullEnt(PhaseGate) || !UTIL_StructureIsFullyBuilt(PhaseGate)) { return; }
 
-	edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ARMOURY, PhaseGate->v.origin, UTIL_MetresToGoldSrcUnits(10.0f), true);
+	edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ARMOURY, PhaseGate->v.origin, UTIL_MetresToGoldSrcUnits(10.0f), true, false);
 
 	if (FNullEnt(Armoury))
 	{
@@ -2757,7 +2764,7 @@ void QueueSecureHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority
 		}
 	}
 
-	edict_t* ExistingTurretFactory = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Area, UTIL_MetresToGoldSrcUnits(15.0f), true);
+	edict_t* ExistingTurretFactory = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYTURRETFACTORY, Area, UTIL_MetresToGoldSrcUnits(15.0f), true, false);
 
 	if (FNullEnt(ExistingTurretFactory))
 	{
@@ -2786,9 +2793,9 @@ void QueueSecureHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority
 		}
 	}
 
-	edict_t* ExistingPhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(15.0f), true);
+	edict_t* ExistingPhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(15.0f), true, false);
 
-	edict_t* BasePhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f), true);
+	edict_t* BasePhaseGate = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PHASEGATE, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(20.0f), true, false);
 
 	if (!FNullEnt(BasePhaseGate) && FNullEnt(ExistingPhaseGate))
 	{
@@ -2823,11 +2830,11 @@ void QueueHeavyArmourLoadout(bot_t* CommanderBot, const Vector& Area, int Priori
 
 	if (!UTIL_ItemCanBeDeployed(ITEM_MARINE_HEAVYARMOUR)) { return; }
 	
-	edict_t* NearestProtoLab = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PROTOTYPELAB, Area, UTIL_MetresToGoldSrcUnits(30.0f), true);
+	edict_t* NearestProtoLab = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_PROTOTYPELAB, Area, UTIL_MetresToGoldSrcUnits(30.0f), true, false);
 	
 	if (FNullEnt(NearestProtoLab)) { return; }
 	
-	edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, NearestProtoLab->v.origin, UTIL_MetresToGoldSrcUnits(30.0f), true);
+	edict_t* NearestArmoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ANYARMOURY, NearestProtoLab->v.origin, UTIL_MetresToGoldSrcUnits(30.0f), true, false);
 
 	if (FNullEnt(NearestArmoury)) { return; }
 
@@ -2937,7 +2944,7 @@ int UTIL_FindClosestAvailableMarinePlayer(bot_t* CommanderBot, const Vector& Loc
 
 	for (int i = 0; i < 32; i++)
 	{
-		if (!FNullEnt(clients[i]) && IsPlayerOnMarineTeam(clients[i]) && !IsPlayerCommander(clients[i]) && !IsPlayerDead(clients[i]) && !IsPlayerBeingDigested(clients[i]))
+		if (!FNullEnt(clients[i]) && IsPlayerOnMarineTeam(clients[i]) && IsPlayerActiveInGame(clients[i]))
 		{
 			if (IsPlayerBot(clients[i]))
 			{
@@ -2945,7 +2952,7 @@ int UTIL_FindClosestAvailableMarinePlayer(bot_t* CommanderBot, const Vector& Loc
 
 				if (BotIndex > -1)
 				{
-					if (bots[BotIndex].CurrentRole == BOT_ROLE_GUARD_BASE) { continue; }
+					if (bots[BotIndex].CurrentRole == BOT_ROLE_SWEEPER) { continue; }
 				}
 
 			}

@@ -4423,7 +4423,6 @@ void HandlePlayerAvoidance(bot_t* pBot, const Vector MoveDestination)
 					// First see if we have enough room to move in our preferred avoidance direction
 					if (UTIL_TraceNav(NavProfileIndex, BotLocation, BotLocation + (PreferredMoveDir * 32.0f), 2.0f))//  UTIL_PointIsDirectlyReachable(BotLocation, BotLocation + (PreferredMoveDir * 32.0f)))
 					{
-						UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, pBot->pEdict->v.origin + Vector(0.0f, 0.0f, 100.0f), 0, 255, 0);
 						pBot->desiredMovementDir = PreferredMoveDir;
 						return;
 					}
@@ -4431,14 +4430,12 @@ void HandlePlayerAvoidance(bot_t* pBot, const Vector MoveDestination)
 					// Then try the opposite direction
 					if (UTIL_TraceNav(NavProfileIndex, BotLocation, BotLocation - (PreferredMoveDir * 32.0f), 2.0f))
 					{
-						UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, pBot->pEdict->v.origin + Vector(0.0f, 0.0f, 100.0f), 0, 0, 255);
 						pBot->desiredMovementDir = -PreferredMoveDir;
 						return;
 					}
 
 					// Back up since we can't go either side
 					pBot->desiredMovementDir = MoveDir * -1.0f;
-					UTIL_DrawLine(clients[0], pBot->pEdict->v.origin, pBot->pEdict->v.origin + Vector(0.0f, 0.0f, 100.0f), 255, 0, 0);
 				}
 			}
 		}

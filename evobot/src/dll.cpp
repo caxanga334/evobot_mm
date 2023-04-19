@@ -415,17 +415,6 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "mymovedir"))
-	{
-		char buf[32];
-		sprintf(buf, "%s\n", (pEntity->v.button & IN_FORWARD) ? "True" : "False");
-		UTIL_SayText(buf, pEntity);
-
-
-		RETURN_META(MRES_SUPERCEDE);
-	}
-
-
 	if (FStrEq(pcmd, "drawobstacles"))
 	{
 		UTIL_DrawTemporaryObstacles();
@@ -1330,23 +1319,7 @@ void StartFrame(void)
 				{
 					UTIL_RefreshMarineItems();
 					last_item_refresh_time = gpGlobals->time;
-				}
-
-				CommanderMode CommMode = CONFIG_GetCommanderMode();
-
-				if (CommMode == COMMANDERMODE_ALWAYS || (CommMode == COMMANDERMODE_IFNOHUMAN && UTIL_GetNumHumansOnTeam(MARINE_TEAM) == 0))
-				{
-					if (!UTIL_IsBotCommanderAssigned() && !UTIL_IsThereACommander())
-					{
-						AssignCommander();
-					}
-				}
-
-				if (UTIL_GetBotsWithRoleType(BOT_ROLE_GUARD_BASE, true, nullptr) == 0)
-				{
-					AssignGuardBot();
-				}
-				
+				}				
 			}
 
 			float timeSinceLastThink = ((currTime - last_think_time) / CLOCKS_PER_SEC);

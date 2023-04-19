@@ -32,8 +32,8 @@ enum BotRole
 
 	BOT_ROLE_COMMAND,		 // Will attempt to take command
 	BOT_ROLE_FIND_RESOURCES, // Will hunt for uncapped resource nodes and cap them. Will attack enemy resource towers
-	BOT_ROLE_GUARD_BASE,	 // Will stay behind in the base and guard/build stuff
-	BOT_ROLE_ASSAULT,		 // Will go to attack the hive
+	BOT_ROLE_SWEEPER,		 // Defensive role to protect infrastructure and build at base. Will patrol to keep outposts secure
+	BOT_ROLE_ASSAULT,		 // Will go to attack the hive and other alien structures
 
 	// Alien roles
 
