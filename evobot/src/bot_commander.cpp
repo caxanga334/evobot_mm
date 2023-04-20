@@ -2290,7 +2290,7 @@ void CommanderQueueNextAction(bot_t* pBot)
 		CommanderQueueInfantryPortalBuild(pBot, CurrentPriority);
 	}
 
-	if (!UTIL_StructureOfTypeExistsInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(10.0f)))
+	if (!UTIL_StructureOfTypeExistsInLocation(STRUCTURE_MARINE_ANYARMOURY, UTIL_GetCommChairLocation(), UTIL_MetresToGoldSrcUnits(15.0f)))
 	{
 		if (UTIL_GetQueuedBuildRequestsOfType(pBot, STRUCTURE_MARINE_ARMOURY) == 0)
 		{
@@ -2614,23 +2614,17 @@ void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 
 	if (FNullEnt(PhaseGate))
 	{
-		edict_t* NearbyMarine = UTIL_GetNearestPlayerOfTeamInArea(Area, UTIL_MetresToGoldSrcUnits(20.0f), MARINE_TEAM, nullptr, CLASS_NONE);
-		commander_action* ExistingAction = UTIL_FindCommanderBuildActionOfType(CommanderBot, STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(20.0f));
+		commander_action* ExistingAction = UTIL_FindCommanderBuildActionOfType(CommanderBot, STRUCTURE_MARINE_PHASEGATE, Area, UTIL_MetresToGoldSrcUnits(30.0f));
 
-		edict_t* DangerTurret = nullptr;
-
-		if (!FNullEnt(NearbyMarine))
+		// We already have a plan to build a phase gate outside this hive, and we haven't already placed it
+		if (ExistingAction && vDist2DSq(ExistingAction->BuildLocation, Area) < sqrf(UTIL_MetresToGoldSrcUnits(30.0f)) && FNullEnt(ExistingAction->StructureOrItem))
 		{
-			DangerTurret = PlayerGetNearestDangerTurret(NearbyMarine, UTIL_MetresToGoldSrcUnits(15.0f));
-		}
+			edict_t* NearbyMarine = UTIL_FindSafePlayerInArea(MARINE_TEAM, Area, UTIL_MetresToGoldSrcUnits(10.0f), UTIL_MetresToGoldSrcUnits(20.0f));
 
-		if (!FNullEnt(NearbyMarine) && FNullEnt(DangerTurret) && vDist2DSq(NearbyMarine->v.origin, Area) > sqrf(UTIL_MetresToGoldSrcUnits(10.0f)) && !UTIL_PlayerHasLOSToEntity(NearbyMarine, HiveIndex->edict, UTIL_MetresToGoldSrcUnits(20.0f), false))
-		{
-			Vector BuildLocation = UTIL_ProjectPointToNavmesh(NearbyMarine->v.origin, Vector(100.0f, 50.0f, 100.0f), BUILDING_REGULAR_NAV_PROFILE);
-			
-
-			if (ExistingAction)
+			if (!FNullEnt(NearbyMarine) && vDist2DSq(ExistingAction->BuildLocation, NearbyMarine->v.origin) > sqrf(UTIL_MetresToGoldSrcUnits(2.0f)) && !UTIL_QuickTrace(NearbyMarine, NearbyMarine->v.origin, HiveIndex->Location))
 			{
+				Vector BuildLocation = UTIL_ProjectPointToNavmesh(NearbyMarine->v.origin, Vector(100.0f, 50.0f, 100.0f), BUILDING_REGULAR_NAV_PROFILE);
+
 				if (BuildLocation != ZERO_VECTOR)
 				{
 					ExistingAction->BuildLocation = BuildLocation;
@@ -2638,23 +2632,24 @@ void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 
 				return;
 			}
-			
-			if (BuildLocation == ZERO_VECTOR)
+		}
+
+		// We don't have any plans to build a phase gate yet
+		if (!ExistingAction)
+		{
+			Vector BuildLocation = ZERO_VECTOR;
+
+			edict_t* NearbyMarine = UTIL_FindSafePlayerInArea(MARINE_TEAM, Area, UTIL_MetresToGoldSrcUnits(10.0f), UTIL_MetresToGoldSrcUnits(20.0f));
+
+			if (!FNullEnt(NearbyMarine))
+			{
+				BuildLocation = UTIL_ProjectPointToNavmesh(NearbyMarine->v.origin, Vector(100.0f, 50.0f, 100.0f), BUILDING_REGULAR_NAV_PROFILE);
+			}
+
+			if (vEquals(BuildLocation, ZERO_VECTOR))
 			{
 				BuildLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, Area, UTIL_MetresToGoldSrcUnits(15.0f), UTIL_MetresToGoldSrcUnits(20.0f));
 			}
-			
-			if (BuildLocation != ZERO_VECTOR)
-			{
-				UTIL_CommanderQueueStructureBuildAtLocation(CommanderBot, BuildLocation, STRUCTURE_MARINE_PHASEGATE, Priority);
-				return;
-			}
-
-		}
-
-		if (!ExistingAction)
-		{
-			Vector BuildLocation = UTIL_GetRandomPointOnNavmeshInDonut(BUILDING_REGULAR_NAV_PROFILE, Area, UTIL_MetresToGoldSrcUnits(15.0f), UTIL_MetresToGoldSrcUnits(20.0f));
 
 			if (BuildLocation != ZERO_VECTOR && (!HiveIndex || !UTIL_QuickTrace(CommanderBot->pEdict, UTIL_GetCentreOfEntity(HiveIndex->edict), BuildLocation + Vector(0.0f, 0.0f, 5.0f))))
 			{
@@ -2666,7 +2661,7 @@ void QueueSiegeHiveAction(bot_t* CommanderBot, const Vector& Area, int Priority)
 		return;
 	}
 
-	if (FNullEnt(PhaseGate) || !UTIL_StructureIsFullyBuilt(PhaseGate)) { return; }
+	if (!UTIL_StructureIsFullyBuilt(PhaseGate)) { return; }
 
 	edict_t* Armoury = UTIL_GetNearestStructureOfTypeInLocation(STRUCTURE_MARINE_ARMOURY, PhaseGate->v.origin, UTIL_MetresToGoldSrcUnits(10.0f), true, false);
 

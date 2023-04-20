@@ -1881,7 +1881,7 @@ edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const 
 			if (!it.second.bUnderAttack || !it.second.bOnNavmesh) { continue; }
 			if (!UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { continue; }
 
-			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_NONE, false);
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_NONE, bIsMarine);
 
 			if (NumPotentialDefenders >= 2) { continue; }
 
@@ -1903,7 +1903,7 @@ edict_t* UTIL_GetNearestUndefendedStructureOfTypeUnderAttack(bot_t* pBot, const 
 			if (!it.second.bUnderAttack || !it.second.bOnNavmesh) { continue; }
 			if (!UTIL_StructureTypesMatch(StructureType, it.second.StructureType)) { continue; }
 
-			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE, false);
+			int NumPotentialDefenders = UTIL_GetNumPlayersOfTeamInArea(it.second.Location, UTIL_MetresToGoldSrcUnits(10.0f), pBot->pEdict->v.team, pBot->pEdict, CLASS_GORGE, bIsMarine);
 
 			if (NumPotentialDefenders >= 2) { continue; }
 
@@ -1965,6 +1965,31 @@ edict_t* UTIL_GetNearestUnbuiltStructureOfTypeInLocation(const NSStructureType S
 	}
 
 	return Result;
+}
+
+edict_t* UTIL_FindSafePlayerInArea(const int Team, const Vector SearchLocation, float MinRadius, float MaxRadius)
+{
+	for (int i = 0; i < 32; i++)
+	{
+		if (!FNullEnt(clients[i]) && IsPlayerActiveInGame(clients[i]) && clients[i]->v.team == Team)
+		{
+			float Distance = vDist2DSq(clients[i]->v.origin, SearchLocation);
+
+			if (Distance < sqrf(MinRadius) || Distance > sqrf(MaxRadius)) { continue; }
+
+			edict_t* DangerTurret = PlayerGetNearestDangerTurret(clients[i], UTIL_MetresToGoldSrcUnits(15.0f));
+
+			if (!FNullEnt(DangerTurret)) { continue; }
+
+			int EnemyTeam = (Team == MARINE_TEAM) ? ALIEN_TEAM : MARINE_TEAM;
+
+			if (UTIL_AnyPlayerOnTeamWithLOS(clients[i]->v.origin, EnemyTeam, UTIL_MetresToGoldSrcUnits(10.0f))) { continue; }
+
+			return clients[i];
+		}
+	}
+
+	return nullptr;
 }
 
 edict_t* UTIL_GetNearestStructureOfTypeInLocation(const NSStructureType StructureType, const Vector& Location, const float SearchRadius, bool bAllowElectrified, bool bUsePhaseDistance)

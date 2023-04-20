@@ -236,6 +236,8 @@ edict_t* UTIL_FindMarineWithDamagedArmour(const Vector& SearchLocation, float Se
 
 HiveStatusType UTIL_GetHiveStatus(const edict_t* Hive);
 
+edict_t* UTIL_FindSafePlayerInArea(const int Team, const Vector SearchLocation, float MinRadius, float MaxRadius);
+
 const hive_definition* UTIL_GetHiveAtIndex(int Index);
 int UTIL_GetNumTotalHives();
 int UTIL_GetNumActiveHives();

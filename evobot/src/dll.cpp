@@ -1858,7 +1858,6 @@ void EvoBot_ServerCommand(void)
 	
 }
 
-
 C_DLLEXPORT int GetEntityAPI2(DLL_FUNCTIONS *pFunctionTable, int *interfaceVersion)
 {
 	gFunctionTable.pfnGameInit = GameDLLInit;
