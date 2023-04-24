@@ -388,28 +388,15 @@ void ClientCommand(edict_t *pEntity)
 		RETURN_META(MRES_SUPERCEDE);
 	}
 
-	if (FStrEq(pcmd, "testattackhive"))
+	if (FStrEq(pcmd, "hasweapon"))
 	{
-		if (!NavmeshLoaded())
+		if (pEntity->v.weapons & (1 << WEAPON_SKULK_LEAP))
 		{
-			UTIL_SayText("Navmesh is not loaded", pEntity);
-			RETURN_META(MRES_SUPERCEDE);
+			UTIL_SayText("TRUE\n", pEntity);
 		}
-
-		for (int i = 0; i < gpGlobals->maxClients; i++)
+		else
 		{
-			if (bots[i].is_used && bots[i].pEdict->v.team == MARINE_TEAM)  // not respawning
-			{
-				const hive_definition* Hive = UTIL_GetNearestHiveOfStatus(bots[i].pEdict->v.origin, HIVE_STATUS_BUILT);
-
-				if (Hive)
-				{
-					bots[i].PrimaryBotTask.TaskType = TASK_ATTACK;
-					bots[i].PrimaryBotTask.TaskTarget = Hive->edict;
-					bots[i].PrimaryBotTask.TaskLocation = Hive->FloorLocation;
-					bots[i].PrimaryBotTask.bOrderIsUrgent = true;
-				}
-			}
+			UTIL_SayText("FALSE\n", pEntity);
 		}
 
 		RETURN_META(MRES_SUPERCEDE);
@@ -447,7 +434,6 @@ void ClientCommand(edict_t *pEntity)
 
 		RETURN_META(MRES_SUPERCEDE);
 	}
-
 
 	if (FStrEq(pcmd, "traceentity"))
 	{
@@ -1000,8 +986,6 @@ void AddBotToTeam(const int Team)
 	{
 		BotCreate(NULL, Team);
 	}
-
-	
 }
 
 int UTIL_GetNumBotsOnTeam(const int Team)

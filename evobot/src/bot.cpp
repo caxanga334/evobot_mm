@@ -615,7 +615,6 @@ void UTIL_BotSuicide(bot_t* pBot)
 		pBot->bIsPendingKill = true;
 		MDLL_ClientKill(pBot->pEdict);
 	}
-	
 }
 
 void StartNewBotFrame(bot_t* pBot)
@@ -5748,8 +5747,11 @@ void UTIL_GenerateGuardWatchPoints(bot_t* pBot, const Vector& GuardLocation)
 
 	for (int i = 0; i < UTIL_GetNumTotalHives(); i++)
 	{
+		const hive_definition* Hive = UTIL_GetHiveAtIndex(i);
 
-		dtStatus SearchResult = FindPathToPoint(MoveProfileIndex, UTIL_GetFloorUnderEntity(UTIL_GetHiveAtIndex(i)->edict), GuardLocation, path, &pathSize, true);
+		if (!Hive || FNullEnt(Hive->edict)) { continue; }
+
+		dtStatus SearchResult = FindPathToPoint(MoveProfileIndex, UTIL_GetFloorUnderEntity(Hive->edict), GuardLocation, path, &pathSize, true);
 
 		if (dtStatusSucceed(SearchResult))
 		{
@@ -6454,14 +6456,6 @@ float UTIL_DistToNearestFriendlyPlayer(const Vector& Location, int DesiredTeam)
 
 	return sqrtf(smallestDist);
 }
-
-
-
-
-
-
-
-
 
 const char* UTIL_ResearchTypeToChar(const NSResearch ResearchType)
 {
