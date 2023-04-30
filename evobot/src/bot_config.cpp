@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+#include <vector> // needed to compile on linux with clang
 
 #include <vector>
 
