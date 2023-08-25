@@ -8,7 +8,7 @@ on:
 
 jobs:
   build_main:
-    name: Build for ${{ matrix.os_short }}
+    name: Build for ${{ matrix.os_short }} (${{ matrix.type }})
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -41,7 +41,7 @@ jobs:
             cc: not-used
             cxx: not-used
           - type: optimized
-            ambuild_params: "--enable-optimize"
+            ambuild_params: "--enable-optimize --symbol-files"
           - type: debug
             ambuild_params: "--enable-debug"
 
@@ -79,7 +79,7 @@ jobs:
       run: |
         mkdir build
         cd build
-        python3 ../configure.py ${{ matrix.ambuild_params }} --symbol-files
+        python3 ../configure.py ${{ matrix.ambuild_params }}
         ambuild
 
     - uses: benjlevesque/short-sha@v2.2
