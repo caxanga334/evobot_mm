@@ -1,8 +1,10 @@
 name: Build on Push
 
-# Workflow is triggered when a push is made to ANY branch!
+# Workflow is triggered when a push is made to ANY branch or on pull request open/reopen!
 on:
   push:
+  pull_request:
+    types: [opened, reopened]
 
 jobs:
   build_main:
@@ -16,25 +18,32 @@ jobs:
           - ubuntu-20.04
           - ubuntu-latest
           - windows-latest
+        type: [ optimized, debug ]
         include:
-
           - os: ubuntu-latest
             os_short: linux-latest
             binary_ext: so
+            debug_ext: dgb
             cc: clang-14
             cxx: clang++-14
 
           - os: ubuntu-20.04
             os_short: linux-old
             binary_ext: so
+            debug_ext: dgb
             cc: clang-9
             cxx: clang++-9
 
           - os: windows-latest
             os_short: windows-latest
             binary_ext: dll
+            debug_ext: pdb
             cc: not-used
             cxx: not-used
+          - type: optimized
+            ambuild_params: "--enable-optimize"
+          - type: debug
+            ambuild_params: "--enable-debug"
 
     steps:
     - name: Install (Linux)
@@ -70,15 +79,16 @@ jobs:
       run: |
         mkdir build
         cd build
-        python3 ../configure.py --enable-optimize --symbol-files
+        python3 ../configure.py ${{ matrix.ambuild_params }} --symbol-files
         ambuild
 
     - uses: benjlevesque/short-sha@v2.2
       id: short-sha
 
-    - name: Upload Binary
+    - name: Upload Build Artifacts
       uses: actions/upload-artifact@v3.1.2
       with:
-        name: evobot_mm-${{ matrix.os_short }}-${{ steps.short-sha.outputs.sha }}
+        name: evobot_mm-${{ matrix.os_short }}-${{ matrix.type }}-${{ steps.short-sha.outputs.sha }}
         path: |
             evobot_mm/build/**/*.${{ matrix.binary_ext }}
+            evobot_mm/build/**/*.${{ matrix.debug_ext }}
