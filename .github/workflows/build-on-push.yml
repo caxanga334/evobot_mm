@@ -23,14 +23,14 @@ jobs:
           - os: ubuntu-latest
             os_short: linux-latest
             binary_ext: so
-            debug_ext: dgb
+            debug_ext: dbg
             cc: clang-14
             cxx: clang++-14
 
           - os: ubuntu-20.04
             os_short: linux-old
             binary_ext: so
-            debug_ext: dgb
+            debug_ext: dbg
             cc: clang-9
             cxx: clang++-9
 
